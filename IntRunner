@@ -1,0 +1,206 @@
+USE [DsReplica]
+GO
+/****** Object:  StoredProcedure [int].[IntRunner]    Script Date: 5/3/2026 3:29:43 PM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+ALTER   PROCEDURE [int].[IntRunner]
+    @PrintOnly bit = 0,
+    @IntegrationLinkedServer NVARCHAR(128) = N'ArTrackSyncServer',
+    @LiveLinkedServer NVARCHAR(128) = N'ArTrackServer',
+    @IntegrationDb NVARCHAR(128) = N'DsReplica',
+    @LiveDb NVARCHAR(128) = N'xtrack'
+AS
+BEGIN
+    -- Art Integration runner 
+
+    SET NOCOUNT ON;
+
+    DECLARE @Id INT;
+    DECLARE @ArTable NVARCHAR(128);
+    DECLARE @SourceGenQuery NVARCHAR(MAX);
+    DECLARE @TargetGenQuery NVARCHAR(MAX);
+    DECLARE @LiveArtMergeSelect NVARCHAR(MAX);
+    DECLARE @LiveArtMergeJoins NVARCHAR(MAX);
+
+    DECLARE @i INT = 1;
+    DECLARE @max INT;
+
+    DECLARE @MergeExec NVARCHAR(MAX);
+    DECLARE @MergeStatement NVARCHAR(MAX);
+    DECLARE @LiveSQL NVARCHAR(MAX);
+    DECLARE @LiveExecSQL NVARCHAR(MAX);
+    DECLARE @LiveExecProc NVARCHAR(500);
+
+    DECLARE @FullScript NVARCHAR(MAX) = N'';
+    DECLARE @CRLF NVARCHAR(2) = CHAR(13) + CHAR(10);
+
+    SET @LiveExecProc = QUOTENAME(@LiveLinkedServer) + N'.master.dbo.sp_executesql';
+
+    IF OBJECT_ID('tempdb..#IntegrationRows') IS NOT NULL
+        DROP TABLE #IntegrationRows;
+
+    SELECT
+        ROW_NUMBER() OVER (ORDER BY Id) AS RowNum,
+        Id,
+        ArtTable,
+        SourceGenQuery,
+        ArtGenQuery,
+        LiveArtMergeSelect,
+        LiveArtMergeJoins
+    INTO #IntegrationRows
+    FROM int.ArtTable
+    WHERE ISNULL(ArtTable, '') <> ''
+      AND ArtGenQuery IS NOT NULL;
+
+    SELECT @max = COUNT(*) FROM #IntegrationRows;
+
+    -------------------------------------------------
+    -- HEADER (converted from PRINT)
+    -------------------------------------------------
+    SET @FullScript = @FullScript +
+        N'--============================================' + @CRLF +
+        N'--Starting integration generator' + @CRLF +
+        N'--Total rows: ' + CAST(ISNULL(@max, 0) AS NVARCHAR(20)) + @CRLF +
+        N'--Print only: ' + CAST(@PrintOnly AS NVARCHAR(1)) + @CRLF +
+        N'--============================================' + @CRLF;
+
+    WHILE @i <= @max
+    BEGIN
+        SELECT
+            @Id = Id,
+            @ArTable = ArtTable,
+            @SourceGenQuery = SourceGenQuery,
+            @TargetGenQuery = ArtGenQuery,
+            @LiveArtMergeSelect = LiveArtMergeSelect,
+            @LiveArtMergeJoins = LiveArtMergeJoins
+        FROM #IntegrationRows
+        WHERE RowNum = @i;
+
+        -------------------------------------------------
+        -- ROW HEADER (converted from PRINT)
+        -------------------------------------------------
+        SET @FullScript = @FullScript +
+            @CRLF +
+            N'--------------------------------------------' + @CRLF +
+            N'--Processing row ' + CAST(@i AS NVARCHAR(20)) + N' of ' + CAST(@max AS NVARCHAR(20)) + @CRLF +
+            N'--Id: ' + CAST(@Id AS NVARCHAR(20)) + @CRLF +
+            N'--Table: ' + ISNULL(@ArTable, N'(null)') + @CRLF +
+            N'--------------------------------------------' + @CRLF;
+
+        BEGIN TRY
+
+            -------------------------------------------------
+            -- Clean up local source/target
+            -------------------------------------------------
+            SET @MergeExec = N'
+IF OBJECT_ID(''[source].[' + @ArTable + N']'', ''U'') IS NOT NULL
+    DROP TABLE [source].[' + @ArTable + N'];
+
+IF OBJECT_ID(''[target].[' + @ArTable + N']'', ''U'') IS NOT NULL
+    DROP TABLE [target].[' + @ArTable + N'];';
+
+            -------------------------------------------------
+            -- Existing local full merge
+            -------------------------------------------------
+            SET @MergeStatement =
+N'EXEC dbo.GenerateMergeStatement
+    @SourceSchema = ''source'',
+    @SourceTable = ''' + @ArTable + N''',
+    @TargetSchema = ''target'',
+    @TargetTable = ''' + @ArTable + N''',
+    @PrimaryKeyColumns = ''Id'',
+    @SoftDeleteNotMatchedBySource = 1,
+    @DeletedColumn = ''Deleted'';';
+
+            -------------------------------------------------
+            -- New live delta push
+            -------------------------------------------------
+            SET @LiveArtMergeSelect = ISNULL(@LiveArtMergeSelect, N'SELECT *');
+
+            SET @LiveSQL = N'
+IF OBJECT_ID(''' + QUOTENAME(@LiveDb) + N'.[source].[' + @ArTable + N']'', ''U'') IS NOT NULL
+    DROP TABLE ' + QUOTENAME(@LiveDb) + N'.[source].[' + @ArTable + N'];
+
+' + @LiveArtMergeSelect + N'
+INTO ' + QUOTENAME(@LiveDb) + N'.[source].[' + @ArTable + N']
+FROM ' + QUOTENAME(@IntegrationLinkedServer) + N'.' + QUOTENAME(@IntegrationDb) + N'.[target].[' + @ArTable + N'] mainTable
+' + ISNULL(@LiveArtMergeJoins, N'') + N'
+WHERE mainTable.IntegrationAction IS NOT NULL;
+
+EXEC ' + QUOTENAME(@LiveDb) + N'.dbo.GenerateMergeStatement
+    @SourceSchema = ''source'',
+    @SourceTable = ''' + @ArTable + N''',
+    @TargetSchema = ''dbo'',
+    @TargetTable = ''' + @ArTable + N''',
+    @PrimaryKeyColumns = ''SyncId'',
+    @DeltaMode = 1;';
+
+            SET @LiveExecSQL =
+                N'EXEC ' + @LiveExecProc + N' N''' +
+                REPLACE(@LiveSQL, '''', '''''') +
+                N''';';
+
+            SET @FullScript = @FullScript +
+                @MergeExec + @CRLF + @CRLF +
+                N'--Running SourceGenQuery for ' + @ArTable + @CRLF +
+                ISNULL(@SourceGenQuery, N'') + @CRLF + @CRLF +
+                N'--Running TargetGenQuery for ' + @ArTable + @CRLF +
+                ISNULL(@TargetGenQuery, N'') + @CRLF + @CRLF +
+                N'--Running local GenerateMergeStatement for ' + @ArTable + @CRLF +
+                @MergeStatement + @CRLF + @CRLF +
+                N'--Copying delta to live and running live GenerateMergeStatement for ' + @ArTable + @CRLF +
+                @LiveExecSQL + @CRLF + @CRLF;
+
+            -------------------------------------------------
+            -- EXECUTION
+            -------------------------------------------------
+            IF @PrintOnly = 0
+                EXEC sp_executesql @MergeExec;
+
+            IF @PrintOnly = 0 AND @SourceGenQuery IS NOT NULL
+                EXEC sp_executesql @SourceGenQuery;
+
+            IF @PrintOnly = 0 AND @TargetGenQuery IS NOT NULL
+                EXEC sp_executesql @TargetGenQuery;
+
+            IF @PrintOnly = 0
+            BEGIN
+                EXEC dbo.GenerateMergeStatement
+                    @SourceSchema = 'source',
+                    @SourceTable = @ArTable,
+                    @TargetSchema = 'target',
+                    @TargetTable = @ArTable,
+                    @PrimaryKeyColumns = 'Id',
+                    @SoftDeleteNotMatchedBySource = 1,
+                    @DeletedColumn = 'Deleted';
+            END
+
+            IF @PrintOnly = 0
+                EXEC sp_executesql @LiveExecSQL;
+
+            SET @FullScript = @FullScript +
+                N'--Completed: ' + @ArTable + @CRLF;
+
+        END TRY
+        BEGIN CATCH
+            SET @FullScript = @FullScript +
+                N'ERROR on table: ' + ISNULL(@ArTable, N'(null)') + @CRLF +
+                ERROR_MESSAGE() + @CRLF;
+        END CATCH;
+
+        SET @i = @i + 1;
+    END
+
+    -------------------------------------------------
+    -- FOOTER (converted from PRINT)
+    -------------------------------------------------
+    SET @FullScript = @FullScript +
+        @CRLF +
+        N'============================================' + @CRLF +
+        N'Integration generator complete' + @CRLF +
+        N'============================================';
+
+    SELECT @FullScript AS RunnableScript;
+END;
