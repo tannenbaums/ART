@@ -1,4 +1,4 @@
-Create or ALTER   PROCEDURE [int].[IntRunner]
+Create or ALTER PROCEDURE [int].[IntRunner]
     @PrintOnly bit = 0,
     @IntegrationLinkedServer NVARCHAR(128) = N'ArTrackSyncServer',
     @LiveLinkedServer NVARCHAR(128) = N'ArTrackServer',
@@ -16,6 +16,9 @@ BEGIN
     DECLARE @TargetGenQuery NVARCHAR(MAX);
     DECLARE @LiveArtMergeSelect NVARCHAR(MAX);
     DECLARE @LiveArtMergeJoins NVARCHAR(MAX);
+    DECLARE @PrimaryKeyColumn NVARCHAR(MAX);
+    DECLARE @HasDeleteAction BIT;
+    DECLARE @DeletedColumnParam NVARCHAR(128);
 
     DECLARE @i INT = 1;
     DECLARE @max INT;
@@ -41,7 +44,9 @@ BEGIN
         SourceGenQuery,
         ArtGenQuery,
         LiveArtMergeSelect,
-        LiveArtMergeJoins
+        LiveArtMergeJoins,
+        PrimaryKeyColumn,
+        HasDeleteAction
     INTO #IntegrationRows
     FROM int.ArtTable
     WHERE ISNULL(ArtTable, '') <> ''
@@ -67,7 +72,9 @@ BEGIN
             @SourceGenQuery = SourceGenQuery,
             @TargetGenQuery = ArtGenQuery,
             @LiveArtMergeSelect = LiveArtMergeSelect,
-            @LiveArtMergeJoins = LiveArtMergeJoins
+            @LiveArtMergeJoins = LiveArtMergeJoins,
+            @PrimaryKeyColumn = PrimaryKeyColumn,
+            @HasDeleteAction = HasDeleteAction
         FROM #IntegrationRows
         WHERE RowNum = @i;
 
@@ -97,15 +104,19 @@ IF OBJECT_ID(''[target].[' + @ArTable + N']'', ''U'') IS NOT NULL
             -------------------------------------------------
             -- Existing local full merge
             -------------------------------------------------
+            SET @PrimaryKeyColumn = ISNULL(@PrimaryKeyColumn, 'Id');
+            SET @HasDeleteAction = ISNULL(@HasDeleteAction, 1);
+            SET @DeletedColumnParam = CASE WHEN @HasDeleteAction = 1 THEN 'Deleted' ELSE NULL END;
+
             SET @MergeStatement =
 N'EXEC dbo.GenerateMergeStatement
     @SourceSchema = ''source'',
     @SourceTable = ''' + @ArTable + N''',
     @TargetSchema = ''target'',
     @TargetTable = ''' + @ArTable + N''',
-    @PrimaryKeyColumns = ''Id'',
-    @SoftDeleteNotMatchedBySource = 1,
-    @DeletedColumn = ''Deleted'';';
+    @PrimaryKeyColumns = ''' + @PrimaryKeyColumn + N''',
+    @SoftDeleteNotMatchedBySource = ' + CAST(@HasDeleteAction AS NVARCHAR(1)) + N',
+    @DeletedColumn = ' + CASE WHEN @HasDeleteAction = 1 THEN N'''Deleted''' ELSE N'NULL' END + N';';
 
             -------------------------------------------------
             -- New live delta push
@@ -127,13 +138,20 @@ EXEC ' + QUOTENAME(@LiveDb) + N'.dbo.GenerateMergeStatement
     @SourceTable = ''' + @ArTable + N''',
     @TargetSchema = ''dbo'',
     @TargetTable = ''' + @ArTable + N''',
-    @PrimaryKeyColumns = ''SyncId'',
+    @PrimaryKeyColumns = ''' + @PrimaryKeyColumn + N''',
     @DeltaMode = 1;';
 
             SET @LiveExecSQL =
-                N'EXEC ' + @LiveExecProc + N' N''' +
+                N'IF EXISTS(SELECT 1 FROM [target].[' + @ArTable + N'] WHERE IntegrationAction IS NOT NULL)' + @CRLF +
+                N'BEGIN' + @CRLF +
+                N'    EXEC ' + @LiveExecProc + N' N''' +
                 REPLACE(@LiveSQL, '''', '''''') +
-                N''';';
+                N''';' + @CRLF +
+                N'END' + @CRLF +
+                N'ELSE' + @CRLF +
+                N'BEGIN' + @CRLF +
+                N'    PRINT ''No changes for ' + @ArTable + N', skipping merge to live.''' + @CRLF +
+                N'END';
 
             SET @FullScript = @FullScript +
                 @MergeExec + @CRLF + @CRLF +
@@ -160,14 +178,19 @@ EXEC ' + QUOTENAME(@LiveDb) + N'.dbo.GenerateMergeStatement
 
             IF @PrintOnly = 0
             BEGIN
+
+            SET @PrimaryKeyColumn = ISNULL(@PrimaryKeyColumn, 'Id');
+            SET @HasDeleteAction = ISNULL(@HasDeleteAction, 1);
+            SET @DeletedColumnParam = CASE WHEN @HasDeleteAction = 1 THEN 'Deleted' ELSE NULL END;
+
                 EXEC dbo.GenerateMergeStatement
                     @SourceSchema = 'source',
                     @SourceTable = @ArTable,
                     @TargetSchema = 'target',
                     @TargetTable = @ArTable,
-                    @PrimaryKeyColumns = 'Id',
-                    @SoftDeleteNotMatchedBySource = 1,
-                    @DeletedColumn = 'Deleted';
+                    @PrimaryKeyColumns = @PrimaryKeyColumn,
+                    @SoftDeleteNotMatchedBySource = @HasDeleteAction,
+                    @DeletedColumn = @DeletedColumnParam;
             END
 
             IF @PrintOnly = 0
