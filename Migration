@@ -215,6 +215,14 @@ join tblResident r on r.Id = s.ResId
 join ##migratingFac pe on r.PeId = pe.Id
 where s.SyncId is null
 
+--fac du
+update xdu
+set SyncId = du.Id
+--select *
+from tblFacDistinctUnit xdu
+join tblNameValue duNv on xdu.DuNvId = duNv.Id
+join ##migratingFac fac on xdu.PeId = fac.Id
+join ##DistinctUnits du on duNv.Name = du.Code and du.CompanyId = fac.SyncId
 
 /*
 
