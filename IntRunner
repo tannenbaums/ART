@@ -1,11 +1,4 @@
-USE [DsReplica]
-GO
-/****** Object:  StoredProcedure [int].[IntRunner]    Script Date: 5/3/2026 3:29:43 PM ******/
-SET ANSI_NULLS ON
-GO
-SET QUOTED_IDENTIFIER ON
-GO
-ALTER   PROCEDURE [int].[IntRunner]
+Create or ALTER   PROCEDURE [int].[IntRunner]
     @PrintOnly bit = 0,
     @IntegrationLinkedServer NVARCHAR(128) = N'ArTrackSyncServer',
     @LiveLinkedServer NVARCHAR(128) = N'ArTrackServer',
