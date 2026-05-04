@@ -1,6 +1,6 @@
 USE [DsReplica]
 GO
-/****** Object:  Table [int].[ArtTable]    Script Date: 5/4/2026 2:55:43 PM ******/
+/****** Object:  Table [int].[ArtTable]    Script Date: 5/4/2026 6:10:18 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -19,12 +19,12 @@ CREATE TABLE [int].[ArtTable](
 GO
 INSERT [int].[ArtTable] ([Id], [SourceTable], [ArtTable], [SourceGenQuery], [ArtGenQuery], [LiveArtMergeSelect], [LiveArtMergeJoins], [PrimaryKeyColumn], [HasDeleteAction]) VALUES (1, N'Companies', N'tblPhysicalEntity', N'select Id SyncId, ShortName Name, Name FriendlyName, ShortName LegacyName, ShortName LogicalName, 3 LevelId, Deleted 
 into [source].tblPhysicalEntity
-from ##Companies', N'select SyncId, pe.Name, pe.FriendlyName, pe.LegacyName, pe.LogicalName, pe.LevelId, ~Active Deleted
+from ##Companies', N'select pe.SyncId, pe.Name, pe.FriendlyName, pe.LegacyName, pe.LogicalName, pe.LevelId, ~Active Deleted
 into [target].tblPhysicalEntity
 from ArTrackServer.xTrack.dbo.tblPhysicalEntity pe
-join [source].tblPhysicalEntity spe on spe.Id = pe.SyncId
+join [source].tblPhysicalEntity spe on spe.SyncId = pe.SyncId
 where pe.LevelId = 3
-and StateId = 1097', N'select Id SyncId, Name, FriendlyName, LegacyName, LogicalName, LevelId, case when deleted = 0 then 1097 else 1098 end StateId
+and StateId = 1097', N'select SyncId, Name, FriendlyName, LegacyName, LogicalName, LevelId, case when deleted = 0 then 1097 else 1098 end StateId
 ', NULL, N'SyncId', 1)
 GO
 INSERT [int].[ArtTable] ([Id], [SourceTable], [ArtTable], [SourceGenQuery], [ArtGenQuery], [LiveArtMergeSelect], [LiveArtMergeJoins], [PrimaryKeyColumn], [HasDeleteAction]) VALUES (3, N'Residents', N'tblPerson', N'select Id SyncId, CompanyId PeId, FirstName First, isnull(MiddleName,'''') Middle, LastName Last
@@ -38,9 +38,9 @@ from ##Residents p', N'select p.SyncId, pe.SyncId PeId, First, Middle, Last, Soc
 into [target].tblPerson
 from ArTrackServer.xTrack.dbo.tblPerson p
 join ArTrackServer.xTrack.dbo.tblPhysicalEntity pe on p.PeId = pe.Id
-join [target].tblPhysicalEntity peInt on pe.SyncId = peInt.Id
+join [target].tblPhysicalEntity peInt on pe.SyncId = peInt.SyncId
 where 1=1
-and p.StateId = 1097', N'select mainTable.Id SyncId, pe.Id PeId, mainTable.First, mainTable.Middle, mainTable.Last
+and p.StateId = 1097', N'select mainTable.SyncId, pe.Id PeId, mainTable.First, mainTable.Middle, mainTable.Last
 , mainTable.Social, mainTable.Male, mainTable.BDate, mainTable.EDate, mainTable.PersonTypeId
 , case when mainTable.Deleted = 0 then 1097 else 1098 end StateId', N'Join [xTrack].[dbo].[tblPhysicalEntity] pe on pe.SyncId = mainTable.PeId
 ', N'SyncId', 1)
@@ -84,7 +84,7 @@ AStart = StartDate
 ,AEnd = EndDate
 ,McaNum = ReferenceNumber
 from [source].tblResident r
-join ##MedicareAEligibility ref on r.Id = ref.ResidentId
+join ##MedicareAEligibility ref on r.SyncId = ref.ResidentId
 
 select ref.ResidentId, ref.StartDate, ref.EndDate
 into ##MedicareBEligibility
@@ -95,7 +95,7 @@ set
 BStart = StartDate
 ,BEnd = EndDate
 from [source].tblResident r
-join ##MedicareBEligibility ref on r.Id = ref.ResidentId
+join ##MedicareBEligibility ref on r.SyncId = ref.ResidentId
 
 select ref.ResidentId, ref.ReferenceNumber, pg.Name
 into ##MedicaidNumber
@@ -108,7 +108,7 @@ update r
 set 
 McoNum = ReferenceNumber
 from [source].tblResident r
-join ##MedicaidNumber ref on r.Id = ref.ResidentId
+join ##MedicaidNumber ref on r.SyncId = ref.ResidentId
 
 /*
 IsPending was a simple checkbox in legacy.
@@ -127,7 +127,7 @@ update r
 set 
 IsPending = pend.IsPending
 from [source].tblResident r
-join ##IsPending pend on r.Id = pend.ResidentId
+join ##IsPending pend on r.SyncId = pend.ResidentId
 
 select *, case when dischargedate is not null then 1 else 0 end IsDC, DischargeDate DischargeDateCalc
 into ##ResStay
@@ -161,7 +161,7 @@ update r
 set 
 	StayStatus = stayStatus.StayStatus
 from [source].tblResident r
-join ##ResStayStatus stayStatus on r.Id = stayStatus.ResidentId
+join ##ResStayStatus stayStatus on r.SyncId = stayStatus.ResidentId
 
 select ResidentId, b.BedNumber
 into ##ResBed
@@ -174,16 +174,15 @@ update r
 set 
 	r.BedNumber = rb.BedNumber
 from [source].tblResident r
-join ##ResBed rb on rb.ResidentId = r.Id
+join ##ResBed rb on rb.ResidentId = r.SyncId
 ', N'select r.SyncId, p.SyncId PersonId, pe.SyncId PeId, SystemNo, InLegal, IsPending, StayStatus, BedNumber, McoNum, McaNum, AStart, AEnd, BStart, BEnd, 0 Deleted
 into [target].tblResident
 from ArTrackServer.xTrack.dbo.tblResident r
 join ArTrackServer.xTrack.dbo.tblPerson p on p.Id = r.PersonId
 join ArTrackServer.xTrack.dbo.tblPhysicalEntity pe on pe.Id = r.PeId
-join [target].tblPhysicalEntity peInt on pe.SyncId = peInt.Id
+join [target].tblPhysicalEntity peInt on pe.SyncId = peInt.SyncId
 where 1=1
-and r.StateId = 1097
-', N'select mainTable.Id SyncId, p.Id PersonId, pe.Id PeId, mainTable.SystemNo, mainTable.InLegal
+and r.StateId = 1097', N'select mainTable.SyncId, p.Id PersonId, pe.Id PeId, mainTable.SystemNo, mainTable.InLegal
 , mainTable.IsPending, mainTable.StayStatus, mainTable.BedNumber, mainTable.McoNum, mainTable.McaNum
 , mainTable.AStart, mainTable.AEnd, BStart, mainTable.BEnd, case when mainTable.deleted = 0 then 1097 else 1098 end StateId', N'join [xtrack].[dbo].[tblPerson] p on mainTable.PersonId = p.SyncId
 join [xtrack].[dbo].[tblPhysicalEntity] pe on mainTable.PeId = pe.SyncId ', N'SyncId', 1)
@@ -196,8 +195,7 @@ into [target].tblStay
 from ArTrackServer.xTrack.dbo.tblStay s
 join ArTrackServer.xTrack.dbo.tblResident r on r.Id = s.ResId
 join ArTrackServer.xTrack.dbo.tblPhysicalEntity pe on pe.Id = r.PeId
-join [target].tblPhysicalEntity peInt on pe.SyncId = peInt.Id
-', N'select mainTable.Id SyncId, r.Id ResId, mainTable.Admission, mainTable.Discharge, mainTable.IsBh, case when mainTable.Deleted = 0 then 1097 else 1098 end StateId
+join [target].tblPhysicalEntity peInt on pe.SyncId = peInt.SyncId', N'select mainTable.SyncId, r.Id ResId, mainTable.Admission, mainTable.Discharge, mainTable.IsBh, case when mainTable.Deleted = 0 then 1097 else 1098 end StateId
 ', N'join [xtrack].[dbo].[tblResident] r on mainTable.ResidentId = r.SyncId', N'SyncId', 1)
 GO
 INSERT [int].[ArtTable] ([Id], [SourceTable], [ArtTable], [SourceGenQuery], [ArtGenQuery], [LiveArtMergeSelect], [LiveArtMergeJoins], [PrimaryKeyColumn], [HasDeleteAction]) VALUES (6, N'ResidentStayPayors', N'tblStayPayor', N'IF OBJECT_ID(''tempdb..##StayCoPayor'') IS NOT NULL DROP TABLE ##StayCoPayor;
@@ -244,7 +242,7 @@ update sp
 set CoPayorId = scp.PayorId
 , CoPay = scp.CoPay
 from [source].tblStayPayor sp
-join ##StayCoPayor scp on sp.Id = scp.StayPayorId
+join ##StayCoPayor scp on sp.SyncId = scp.StayPayorId
 
 SELECT
     s.ResidentStayPayorId StayPayorId,
@@ -275,7 +273,7 @@ OUTER APPLY
 update sp
 set RateCode = scp.PayorRateCode
 from [source].tblStayPayor sp
-join ##BestRateCode scp on sp.Id = scp.StayPayorId
+join ##BestRateCode scp on sp.SyncId = scp.StayPayorId
 
 update sp
 set RefNum = scp.ReferenceNumber
@@ -287,16 +285,17 @@ update sp
 set AuthNum = auth.AuthorizationNumber
 --select *
 from [source].tblStayPayor sp
-join ##ResidentPayorAuthorizationNumbers auth on sp.Id = auth.residentpayorid', N'select sp.SyncId, s.SyncId StayId, StartDate, EndDate, IncidentNum, ExpendedDays, p.SyncId PayorId, RateCode
+join ##ResidentPayorAuthorizationNumbers auth on sp.SyncId = auth.residentpayorid', N'select sp.SyncId, s.SyncId StayId, StartDate, EndDate, IncidentNum, ExpendedDays, p.SyncId PayorId, RateCode
 , RefNum, AuthNum, cp.SyncId CoPayorId, CoPay, 0 Deleted
 into [target].tblStayPayor 
 from ArTrackServer.xTrack.dbo.tblStayPayor sp
 join ArTrackServer.xTrack.dbo.tblStay s on s.Id = sp.StayId
 join ArTrackServer.xTrack.dbo.tblResident r on r.Id = s.ResId
 join ArTrackServer.xTrack.dbo.tblPhysicalEntity pe on pe.Id = r.PeId
-join [target].tblPhysicalEntity peInt on pe.SyncId = peInt.Id
+join [target].tblPhysicalEntity peInt on pe.SyncId = peInt.SyncId
 left join ArTrackServer.xTrack.dbo.tblPayor p on p.Id = sp.PayorId
-left join ArTrackServer.xTrack.dbo.tblPayor cp on cp.Id = sp.CoPayorId', N'Select mainTable.Id SyncId, s.Id StayId, mainTable.StartDate, mainTable.EndDate, mainTable.IncidentNum, mainTable.ExpendedDays
+left join ArTrackServer.xTrack.dbo.tblPayor cp on cp.Id = sp.CoPayorId
+', N'Select mainTable.SyncId, s.Id StayId, mainTable.StartDate, mainTable.EndDate, mainTable.IncidentNum, mainTable.ExpendedDays
  , p.Id PayorId, mainTable.RateCode, mainTable.RefNum, mainTable.AuthNum, cp.Id CoPayorId, mainTable.CoPay
  , case when mainTable.Deleted = 0 then 1097 else 1098 end StateId
 ', N'join [xTrack].[dbo].[tblStay] s on s.SyncId = mainTable.StayId
@@ -312,8 +311,8 @@ into [target].tblPayor
 from ArTrackServer.xTrack.dbo.tblPayor p
 join ArTrackServer.xTrack.dbo.tblPayor pg on p.ParentId = pg.Id
 join ArTrackServer.xTrack.dbo.tblPhysicalEntity pe on pe.Id = p.PeId
-join [target].tblPhysicalEntity peInt on pe.SyncId = peInt.Id
-', N'select mainTable.Id SyncId, mainTable.Code, mainTable.Name, mainTable.FriendlyName, pgroup.Id ParentId, pe.Id PeId, case when mainTable.Deleted = 0 then 1097 else 1098 end StateId
+join [target].tblPhysicalEntity peInt on pe.SyncId = peInt.SyncId
+', N'select mainTable.SyncId, mainTable.Code, mainTable.Name, mainTable.FriendlyName, pgroup.Id ParentId, pe.Id PeId, case when mainTable.Deleted = 0 then 1097 else 1098 end StateId
 ', N'join [xTrack].[dbo].[tblPayor] pgroup on (pgroup.Name = mainTable.PayorGroup and pgroup.LevelId in (5,6))
 join [xTrack].[dbo].[tblPhysicalEntity] pe on pe.SyncId = mainTable.PeId
 ', N'SyncId', 1)
@@ -325,6 +324,20 @@ into [target].[tblNameValue]
 from ArTrackServer.xTrack.dbo.tblNameValue dus
 join ArTrackServer.xTrack.dbo.tblNameValue parent on parent.Id = dus.ParentId
 join [source].tblGenericDu sdu on dus.Name = sdu.Id
-where parent.Name = ''Case.DistinctUnits''', N'SELECT Name, Name FriendlyName, (select Id from [xtrack].[dbo].tblNameValue where Name = ''''Case.DistinctUnits'''') ParentId
-', NULL, N'Name', 0)
+where parent.Name = ''Case.DistinctUnits''', N'SELECT Name, Name FriendlyName, (select Id from [xtrack].[dbo].tblNameValue where Name = ''Case.DistinctUnits'') ParentId', NULL, N'Name', 0)
+GO
+INSERT [int].[ArtTable] ([Id], [SourceTable], [ArtTable], [SourceGenQuery], [ArtGenQuery], [LiveArtMergeSelect], [LiveArtMergeJoins], [PrimaryKeyColumn], [HasDeleteAction]) VALUES (8, NULL, N'tblFacDistinctUnit', N'select du.Id SyncId, du.Code Name, c.Id PeId, du.Deleted
+into [source].[tblFacDistinctUnit]
+from ##DistinctUnits du
+join ##Companies c on du.CompanyId = c.Id', N'select du.SyncId, duNV.Name, pe.SyncId PeId
+, case when statusNv.Name = ''Deleted'' then 1 else 0 end Deleted
+into [target].[tblFacDistinctUnit]
+from ArTrackServer.xTrack.dbo.tblFacDistinctUnit du
+join ArTrackServer.xTrack.dbo.tblPhysicalEntity pe on pe.Id = du.PeId
+join ArTrackServer.xTrack.dbo.tblNameValue duNV on du.DuNvId = duNV.Id
+join ArTrackServer.xTrack.dbo.tblNameValue statusNv on du.StateId = statusNv.Id
+join [target].tblPhysicalEntity peInt on pe.SyncId = peInt.SyncId', N'SELECT mainTable.SyncId , duNV.Id DuNvId, Deleted, case when Deleted = 0 then 1097 else 1098 end StateId
+', N'join [xtrack].[dbo].[tblPhysicalEntity] pe on mainTable.PeId = pe.SyncId
+join xTrack.dbo.tblNameValue duNv on mainTable.Name = duNv.Name
+', N'SyncId', 1)
 GO
