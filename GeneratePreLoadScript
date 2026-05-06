@@ -1,7 +1,9 @@
 Create or ALTER PROCEDURE [int].[GeneratePreLoadScript]
     @IntegrationId INT,
     @Execute bit = 1,
-    @FilterByARTrackEnabled bit = 0
+    @FilterByARTrackEnabled bit = 0,
+    @LiveLinkedServer NVARCHAR(128) = N'ArTrackServer',
+    @LiveDb NVARCHAR(128) = N'xTrack'
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -25,6 +27,28 @@ BEGIN
     WHERE d.IntId = @IntegrationId
     ORDER BY it.Id;
 
+	-------------------------------------------------
+	-- stage the ART preload table list
+	-------------------------------------------------
+	IF OBJECT_ID('tempdb..#ArtTables') IS NOT NULL DROP TABLE #ArtTables;
+	
+	SELECT
+	    ROW_NUMBER() OVER (
+	        ORDER BY 
+	            CASE WHEN atl.ArtTable = 'tblPhysicalEntity' THEN 0 ELSE 1 END,
+	            MIN(atl.Id)
+	    ) AS RowNum,
+	    atl.ArtTable,
+	    MAX(atl.PreLoaderJoins) AS PreLoadJoins,
+	    atl.SectionId,
+	    s.Name AS SectionName
+	INTO #ArtTables
+	FROM int.ArtTableLoader atl
+	JOIN int.IntegrationSection s ON atl.SectionId = s.Id
+	JOIN int.IntegrationDetails d ON atl.SectionId = d.SectionId
+	WHERE d.IntId = @IntegrationId
+	  AND ISNULL(atl.ArtTable, '') <> ''
+	GROUP BY atl.ArtTable, atl.SectionId, s.Name;
     -------------------------------------------------
     -- setup
     -------------------------------------------------
@@ -37,6 +61,13 @@ BEGIN
     DECLARE @TableFilter NVARCHAR(MAX);
     DECLARE @SectionName NVARCHAR(100);
     DECLARE @RawTableName NVARCHAR(300);
+
+    DECLARE @ArtRowNum INT = 1;
+    DECLARE @ArtMax INT = (SELECT COUNT(*) FROM #ArtTables);
+    DECLARE @ArtTable NVARCHAR(256);
+    DECLARE @ArtTempTableName NVARCHAR(300);
+    DECLARE @PreLoadJoins NVARCHAR(MAX);
+    DECLARE @ArtSectionName NVARCHAR(100);
 
     DECLARE @SQL NVARCHAR(MAX);
     DECLARE @ExecSQL NVARCHAR(MAX);
@@ -220,6 +251,96 @@ END +
         END;
 
         SELECT @Id = MIN(Id) FROM #Tables WHERE Id > @Id;
+    END;
+
+    -------------------------------------------------
+    -- loop ART tables - create local ART preload tables
+    -------------------------------------------------
+    WHILE @ArtRowNum IS NOT NULL AND @ArtRowNum <= @ArtMax
+    BEGIN
+        SELECT
+            @ArtTable = ArtTable,
+            @PreLoadJoins = PreLoadJoins,
+            @ArtSectionName = SectionName
+        FROM #ArtTables
+        WHERE RowNum = @ArtRowNum;
+
+        SET @ArtTempTableName = N'ART_' + @ArtTable;
+
+        IF @ArtSectionName = N'Generic'
+        BEGIN
+            SET @SQL =
+                N'IF OBJECT_ID(''tempdb..[##' + @ArtTempTableName + N']'') IS NOT NULL DROP TABLE [##' + @ArtTempTableName + N'];' + @CRLF +
+                N'select t.*' + @CRLF +
+                N'into [##' + @ArtTempTableName + N']' + @CRLF +
+                N'from ' + QUOTENAME(@LiveLinkedServer) + N'.' + QUOTENAME(@LiveDb) + N'.[dbo].[' + @ArtTable + N'] t' + @CRLF +
+                N';';
+        END
+        ELSE IF @ArtTable = N'tblPhysicalEntity'
+        BEGIN
+            SET @SQL =
+                N'IF OBJECT_ID(''tempdb..[##' + @ArtTempTableName + N']'') IS NOT NULL DROP TABLE [##' + @ArtTempTableName + N'];' + @CRLF +
+                N'select t.*' + @CRLF +
+                N'into [##' + @ArtTempTableName + N']' + @CRLF +
+                N'from ' + QUOTENAME(@LiveLinkedServer) + N'.' + QUOTENAME(@LiveDb) + N'.[dbo].[' + @ArtTable + N'] t' + @CRLF +
+                N'join ##Companies c on t.SyncId = c.Id' + @CRLF +
+                N';';
+        END
+        ELSE
+        BEGIN
+            SET @SQL =
+                N'IF OBJECT_ID(''tempdb..[##' + @ArtTempTableName + N']'') IS NOT NULL DROP TABLE [##' + @ArtTempTableName + N'];' + @CRLF +
+                CASE
+                    WHEN ISNULL(@PreLoadJoins, N'') <> ''
+                        THEN
+                            N'select mainTable.*' + @CRLF +
+                            N'into [##' + @ArtTempTableName + N']' + @CRLF +
+                            N'from ' + QUOTENAME(@LiveLinkedServer) + N'.' + QUOTENAME(@LiveDb) + N'.[dbo].[' + @ArtTable + N'] mainTable' + @CRLF +
+                            @PreLoadJoins + @CRLF +
+                            N'join ##ART_tblPhysicalEntity pe on t.PeId = pe.Id' + @CRLF +
+                            N'join ##Companies c on pe.SyncId = c.Id' + @CRLF
+                    ELSE
+                            N'select t.*' + @CRLF +
+                            N'into [##' + @ArtTempTableName + N']' + @CRLF +
+                            N'from ' + QUOTENAME(@LiveLinkedServer) + N'.' + QUOTENAME(@LiveDb) + N'.[dbo].[' + @ArtTable + N'] t' + @CRLF +
+                            N'join ##ART_tblPhysicalEntity pe on t.PeId = pe.Id' + @CRLF +
+                            N'join ##Companies c on pe.SyncId = c.Id' + @CRLF
+                END +
+                N';';
+        END;
+
+        SET @FullScript = @FullScript +
+            N'-------------------------------------------------' + @CRLF +
+            N'-- ##' + @ArtTempTableName + @CRLF +
+            N'-------------------------------------------------' + @CRLF +
+            @SQL + @CRLF + @CRLF;
+
+        IF @Execute = 1
+        BEGIN
+            RAISERROR('Starting ##%s...', 0, 1, @ArtTempTableName) WITH NOWAIT;
+            SET @StartTime = SYSDATETIME();
+            SET @RowCount = NULL;
+
+            SET @ExecSQL = @SQL + @CRLF + N'SELECT @RowCountOUT = @@ROWCOUNT;';
+
+            EXEC sp_executesql
+                @ExecSQL,
+                N'@RowCountOUT INT OUTPUT',
+                @RowCountOUT = @RowCount OUTPUT;
+
+            SET @ElapsedMs = DATEDIFF(MILLISECOND, @StartTime, SYSDATETIME());
+            SET @SafeRowCount = ISNULL(@RowCount, 0);
+
+            RAISERROR(
+                'Finished ##%s in %d ms, %d rows',
+                0, 1,
+                @ArtTempTableName,
+                @ElapsedMs,
+                @SafeRowCount
+            ) WITH NOWAIT;
+        END;
+
+        SET @ArtRowNum = @ArtRowNum + 1;
     END;
 
     -------------------------------------------------
