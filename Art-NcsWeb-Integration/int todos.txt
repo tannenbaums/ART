@@ -1,0 +1,28 @@
+int todos:
+a soft delete should have a U as the verb, not a delete, because it's just updating delete=1
+DU
+gen queries to bring in to live
+AR
+auto nri
+
+generate if exists around the live blocks
+check db size on citrix dev
+
+
+intrunner non print mode is not really matching print mode, need to go back to that, don't want to get bugged down with it at the moment
+
+in pre-reqs you are updating 2 payor group names, i think it's safer to add another column because i'm not sure how this will effect the legacy sync
+
+Generate architecutla diagram
+
+the merge adds intaction column to art tables, no good, I'll deal with it later after aging is done
+
+let them know that there will be a tekufa of adjustments as ncs is a big system and I have no way of testing different scenarios and they will come up
+
+lose ends
+
+
+
+wed:
+just found a duplicate resident
+seems to have come from the merge proc, need to check it out, replay it from scratch

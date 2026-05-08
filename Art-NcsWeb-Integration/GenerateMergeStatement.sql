@@ -1,0 +1,289 @@
+ALTER PROCEDURE [dbo].[GenerateMergeStatement] 
+    @TargetSchema NVARCHAR(50), 
+    @TargetTable NVARCHAR(50),
+    @SourceSchema NVARCHAR(50),
+    @SourceTable NVARCHAR(50),
+    @PrimaryKeyColumns NVARCHAR(MAX),  -- Supports multiple primary keys (comma-separated)
+    @StateColumn NVARCHAR(50) = NULL,
+    @IgnoreColumns NVARCHAR(MAX) = NULL,  -- New parameter for ignoring columns
+    @DeleteNotMatchedBySource BIT = 0,
+    @SoftDeleteNotMatchedBySource BIT = 0,
+    @DeletedColumn NVARCHAR(128) = NULL
+AS
+BEGIN
+    DECLARE @SQL NVARCHAR(MAX);
+    DECLARE @JoinCondition NVARCHAR(MAX);
+    DECLARE @Columns NVARCHAR(MAX) = '';  
+    DECLARE @UpdateColumns NVARCHAR(MAX) = '';  
+    DECLARE @InsertColumns NVARCHAR(MAX);
+    DECLARE @InsertValues NVARCHAR(MAX);
+    DECLARE @IntegrationActionColumn NVARCHAR(128) = 'IntegrationAction';
+    DECLARE @AlterSQL NVARCHAR(MAX);
+
+    -------------------------------------------------
+    -- VALIDATION FOR DELETE OPTIONS
+    -------------------------------------------------
+    IF @DeleteNotMatchedBySource = 1 AND @SoftDeleteNotMatchedBySource = 1
+    BEGIN
+        RAISERROR('You cannot enable both hard delete and soft delete.', 16, 1);
+        RETURN;
+    END;
+
+    IF @SoftDeleteNotMatchedBySource = 1 AND ISNULL(LTRIM(RTRIM(@DeletedColumn)), '') = ''
+    BEGIN
+        RAISERROR('DeletedColumn is required when SoftDeleteNotMatchedBySource = 1.', 16, 1);
+        RETURN;
+    END;
+
+    IF @SoftDeleteNotMatchedBySource = 1
+       AND NOT EXISTS (
+            SELECT 1
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_SCHEMA = @TargetSchema
+              AND TABLE_NAME = @TargetTable
+              AND COLUMN_NAME = @DeletedColumn
+       )
+    BEGIN
+        RAISERROR('DeletedColumn does not exist in the target table.', 16, 1);
+        RETURN;
+    END;
+
+    -------------------------------------------------
+    -- AUTO-ADD IntegrationAction COLUMN IF MISSING
+    -------------------------------------------------
+    IF NOT EXISTS (
+        SELECT 1
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = @TargetSchema
+          AND TABLE_NAME = @TargetTable
+          AND COLUMN_NAME = @IntegrationActionColumn
+    )
+    BEGIN
+        SET @AlterSQL = '
+ALTER TABLE ' + QUOTENAME(@TargetSchema) + '.' + QUOTENAME(@TargetTable) + '
+ADD ' + QUOTENAME(@IntegrationActionColumn) + ' CHAR(1) NULL;';
+
+        PRINT 'Adding IntegrationAction column to ' + @TargetSchema + '.' + @TargetTable;
+        EXEC sp_executesql @AlterSQL;
+    END;
+
+    -------------------------------------------------
+
+    -- Generate join condition for composite key
+    -------------------------------------------------
+    SELECT @JoinCondition = 
+        STUFF((
+            SELECT 
+                ' AND ' +
+                CASE 
+                    WHEN c.DATA_TYPE IN ('char', 'varchar', 'nchar', 'nvarchar', 'text', 'ntext')
+                        THEN 'tgt.' + QUOTENAME(LTRIM(RTRIM(value))) + ' COLLATE DATABASE_DEFAULT = src.' + QUOTENAME(LTRIM(RTRIM(value))) + ' COLLATE DATABASE_DEFAULT'
+                    ELSE 'tgt.' + QUOTENAME(LTRIM(RTRIM(value))) + ' = src.' + QUOTENAME(LTRIM(RTRIM(value)))
+                END
+            FROM STRING_SPLIT(@PrimaryKeyColumns, ',') pk
+            JOIN INFORMATION_SCHEMA.COLUMNS c
+                ON c.TABLE_SCHEMA = @TargetSchema
+               AND c.TABLE_NAME = @TargetTable
+               AND c.COLUMN_NAME = LTRIM(RTRIM(pk.value))
+            FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)'), 1, 5, '');
+
+    -------------------------------------------------
+    -- Get column names dynamically
+    -------------------------------------------------
+    SELECT @Columns = 
+        STUFF((
+            SELECT ', tgt.' + QUOTENAME(c.COLUMN_NAME) + ' = src.' + QUOTENAME(c.COLUMN_NAME)
+            FROM INFORMATION_SCHEMA.COLUMNS c
+            WHERE c.TABLE_SCHEMA = @TargetSchema 
+              AND c.TABLE_NAME = @TargetTable
+              AND CHARINDEX(',' + c.COLUMN_NAME + ',', ',' + REPLACE(@PrimaryKeyColumns, ' ', '') + ',') = 0
+              AND (@StateColumn IS NULL OR c.COLUMN_NAME <> @StateColumn)
+              AND (@SoftDeleteNotMatchedBySource = 0 OR c.COLUMN_NAME <> @DeletedColumn)
+              AND c.COLUMN_NAME <> @IntegrationActionColumn
+              AND (@IgnoreColumns IS NULL OR CHARINDEX(',' + c.COLUMN_NAME + ',', ',' + REPLACE(@IgnoreColumns, ' ', '') + ',') = 0)
+            FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)'), 1, 2, '');
+
+    -- OPTIONAL: undelete matched rows if soft delete mode is enabled
+    IF @SoftDeleteNotMatchedBySource = 1
+    BEGIN
+        SET @Columns = 
+            CASE 
+                WHEN LEN(ISNULL(@Columns, '')) > 0 
+                    THEN @Columns + ', tgt.' + QUOTENAME(@DeletedColumn) + ' = 0'
+                ELSE 'tgt.' + QUOTENAME(@DeletedColumn) + ' = 0'
+            END;
+    END
+
+    -- ALWAYS: set integration action on matched update
+    SET @Columns = 
+        CASE 
+            WHEN LEN(ISNULL(@Columns, '')) > 0 
+                THEN @Columns + ', tgt.' + QUOTENAME(@IntegrationActionColumn) + ' = ''U'''
+            ELSE 'tgt.' + QUOTENAME(@IntegrationActionColumn) + ' = ''U'''
+        END;
+
+    -------------------------------------------------
+    -- Generate update condition dynamically
+    -------------------------------------------------
+    IF @Columns IS NOT NULL AND LEN(@Columns) > 0
+    BEGIN
+        SELECT @UpdateColumns = 
+            STUFF((
+                SELECT 
+                    ' OR ' +
+                    CASE 
+                        WHEN c.DATA_TYPE IN ('char', 'varchar', 'nchar', 'nvarchar', 'text', 'ntext')
+                            THEN 'tgt.' + QUOTENAME(c.COLUMN_NAME) + ' COLLATE DATABASE_DEFAULT <> src.' + QUOTENAME(c.COLUMN_NAME) + ' COLLATE DATABASE_DEFAULT'
+                        ELSE 'tgt.' + QUOTENAME(c.COLUMN_NAME) + ' <> src.' + QUOTENAME(c.COLUMN_NAME)
+                    END
+                FROM INFORMATION_SCHEMA.COLUMNS c
+                WHERE c.TABLE_SCHEMA = @TargetSchema 
+                  AND c.TABLE_NAME = @TargetTable
+                  AND CHARINDEX(',' + c.COLUMN_NAME + ',', ',' + REPLACE(@PrimaryKeyColumns, ' ', '') + ',') = 0
+                  AND (@StateColumn IS NULL OR c.COLUMN_NAME <> @StateColumn)
+                  AND (@SoftDeleteNotMatchedBySource = 0 OR c.COLUMN_NAME <> @DeletedColumn)
+                  AND c.COLUMN_NAME <> @IntegrationActionColumn
+                  AND (@IgnoreColumns IS NULL OR CHARINDEX(',' + c.COLUMN_NAME + ',', ',' + REPLACE(@IgnoreColumns, ' ', '') + ',') = 0)
+                FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)'), 1, 4, '');
+    END
+
+    -- OPTIONAL: also update when matched row is soft-deleted and needs restore
+    IF @SoftDeleteNotMatchedBySource = 1
+    BEGIN
+        SET @UpdateColumns = ISNULL(@UpdateColumns, '') 
+            + CASE WHEN LEN(ISNULL(@UpdateColumns, '')) > 0 THEN ' OR ' ELSE '' END
+            + 'tgt.' + QUOTENAME(@DeletedColumn) + ' <> 0';
+    END
+
+    -------------------------------------------------
+    -- Generate insert column list
+    -------------------------------------------------
+    SELECT @InsertColumns = 
+        STUFF((
+            SELECT ', ' + QUOTENAME(c.COLUMN_NAME)
+            FROM INFORMATION_SCHEMA.COLUMNS c
+            WHERE c.TABLE_SCHEMA = @TargetSchema 
+              AND c.TABLE_NAME = @TargetTable
+              AND (
+                    CHARINDEX(',' + c.COLUMN_NAME + ',', ',' + REPLACE(@PrimaryKeyColumns, ' ', '') + ',') > 0
+                    OR (
+                        (@IgnoreColumns IS NULL OR CHARINDEX(',' + c.COLUMN_NAME + ',', ',' + REPLACE(@IgnoreColumns, ' ', '') + ',') = 0)
+                        AND (@SoftDeleteNotMatchedBySource = 0 OR c.COLUMN_NAME <> @DeletedColumn)
+                        AND c.COLUMN_NAME <> @IntegrationActionColumn
+                    )
+                  )
+            FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)'), 1, 2, '');
+
+    -- OPTIONAL: include deleted bit on insert
+    IF @SoftDeleteNotMatchedBySource = 1
+       AND CHARINDEX(',' + @DeletedColumn + ',', ',' + REPLACE(ISNULL(@IgnoreColumns, ''), ' ', '') + ',') = 0
+       AND CHARINDEX(',' + @DeletedColumn + ',', ',' + REPLACE(@PrimaryKeyColumns, ' ', '') + ',') = 0
+       AND CHARINDEX(QUOTENAME(@DeletedColumn), @InsertColumns) = 0
+    BEGIN
+        SET @InsertColumns = @InsertColumns + ', ' + QUOTENAME(@DeletedColumn);
+    END
+
+    -- ALWAYS: include IntegrationAction on insert
+    IF CHARINDEX(QUOTENAME(@IntegrationActionColumn), @InsertColumns) = 0
+    BEGIN
+        SET @InsertColumns = @InsertColumns + ', ' + QUOTENAME(@IntegrationActionColumn);
+    END
+
+    -------------------------------------------------
+    -- Generate insert values list
+    -------------------------------------------------
+    SELECT @InsertValues = 
+        STUFF((
+            SELECT ', src.' + QUOTENAME(c.COLUMN_NAME)
+            FROM INFORMATION_SCHEMA.COLUMNS c
+            WHERE c.TABLE_SCHEMA = @TargetSchema 
+              AND c.TABLE_NAME = @TargetTable
+              AND (
+                    CHARINDEX(',' + c.COLUMN_NAME + ',', ',' + REPLACE(@PrimaryKeyColumns, ' ', '') + ',') > 0
+                    OR (
+                        (@IgnoreColumns IS NULL OR CHARINDEX(',' + c.COLUMN_NAME + ',', ',' + REPLACE(@IgnoreColumns, ' ', '') + ',') = 0)
+                        AND (@SoftDeleteNotMatchedBySource = 0 OR c.COLUMN_NAME <> @DeletedColumn)
+                        AND c.COLUMN_NAME <> @IntegrationActionColumn
+                    )
+                  )
+            FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)'), 1, 2, '');
+
+    -- OPTIONAL: insert active rows as not deleted
+    IF @SoftDeleteNotMatchedBySource = 1
+       AND CHARINDEX(',' + @DeletedColumn + ',', ',' + REPLACE(ISNULL(@IgnoreColumns, ''), ' ', '') + ',') = 0
+       AND CHARINDEX(',' + @DeletedColumn + ',', ',' + REPLACE(@PrimaryKeyColumns, ' ', '') + ',') = 0
+       AND CHARINDEX('src.' + QUOTENAME(@DeletedColumn), @InsertValues) = 0
+    BEGIN
+        SET @InsertValues = @InsertValues + ', 0';
+    END
+
+    -- ALWAYS: insert action C
+    IF CHARINDEX('src.' + QUOTENAME(@IntegrationActionColumn), @InsertValues) = 0
+    BEGIN
+        SET @InsertValues = @InsertValues + ', ''C''';
+    END
+
+    -------------------------------------------------
+    -- Build dynamic MERGE SQL
+    -------------------------------------------------
+    SET @SQL = '
+MERGE INTO ' + QUOTENAME(@TargetSchema) + '.' + QUOTENAME(@TargetTable) + ' AS tgt
+USING ' + QUOTENAME(@SourceSchema) + '.' + QUOTENAME(@SourceTable) + ' AS src
+ON ' + @JoinCondition;
+
+    IF LEN(@UpdateColumns) > 0
+    BEGIN
+        SET @SQL = @SQL + '
+
+WHEN MATCHED AND (' + @UpdateColumns + ')
+THEN UPDATE SET ' + @Columns;
+    END
+
+    SET @SQL = @SQL + '
+
+WHEN NOT MATCHED THEN 
+    INSERT (' + @InsertColumns + ') 
+    VALUES (' + @InsertValues + ')';
+
+    IF @DeleteNotMatchedBySource = 1
+    BEGIN
+        IF @StateColumn IS NOT NULL
+        BEGIN
+            SET @SQL = @SQL + '
+
+WHEN NOT MATCHED BY SOURCE THEN 
+    UPDATE SET ' + QUOTENAME(@StateColumn) + ' = ''inactive'', '
+                + QUOTENAME(@IntegrationActionColumn) + ' = ''D''';
+        END
+        ELSE
+        BEGIN
+            SET @SQL = @SQL + '
+
+WHEN NOT MATCHED BY SOURCE THEN DELETE';
+        END
+    END
+    ELSE IF @SoftDeleteNotMatchedBySource = 1
+    BEGIN
+        SET @SQL = @SQL + '
+
+WHEN NOT MATCHED BY SOURCE THEN 
+    UPDATE SET ' + QUOTENAME(@DeletedColumn) + ' = 1, '
+            + QUOTENAME(@IntegrationActionColumn) + ' = ''D''';
+    END
+
+    SET @SQL = @SQL + ';';
+
+    PRINT ' ';
+    PRINT '============================================';
+    PRINT 'MERGE for ' + @TargetSchema + '.' + @TargetTable;
+    PRINT '============================================';
+
+    PRINT @SQL;          
+    SELECT @SQL AS GeneratedSQL;
+
+    PRINT '============================================';
+    PRINT ' ';
+
+    EXEC sp_executesql @SQL;
+END;
+GO
