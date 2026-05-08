@@ -1,0 +1,139 @@
+USE [DsReplica]
+GO
+/****** Object:  Table [int].[IntegratedSystem]    Script Date: 5/8/2026 9:28:31 AM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [int].[IntegratedSystem](
+	[Id] [int] NOT NULL,
+	[SystemName] [varchar](100) NULL,
+	[TablePrefix] [varchar](5000) NULL,
+	[LatestTimestampQuery] [varchar](5000) NULL
+) ON [PRIMARY]
+GO
+/****** Object:  Table [int].[Integration]    Script Date: 5/8/2026 9:28:31 AM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [int].[Integration](
+	[Id] [int] NOT NULL,
+	[Name] [varchar](500) NULL,
+	[SystemId] [int] NULL,
+	[StrategyId] [int] NULL
+) ON [PRIMARY]
+GO
+/****** Object:  Table [int].[IntegrationDetails]    Script Date: 5/8/2026 9:28:31 AM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [int].[IntegrationDetails](
+	[Id] [int] NOT NULL,
+	[IntId] [int] NULL,
+	[SectionId] [int] NULL
+) ON [PRIMARY]
+GO
+/****** Object:  Table [int].[IntegrationSection]    Script Date: 5/8/2026 9:28:31 AM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [int].[IntegrationSection](
+	[Id] [int] NOT NULL,
+	[Name] [varchar](100) NULL
+) ON [PRIMARY]
+GO
+/****** Object:  Table [int].[IntegrationStrategy]    Script Date: 5/8/2026 9:28:31 AM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [int].[IntegrationStrategy](
+	[Id] [int] NOT NULL,
+	[Strategy] [varchar](200) NULL
+) ON [PRIMARY]
+GO
+/****** Object:  Table [int].[IntegrationTable]    Script Date: 5/8/2026 9:28:31 AM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+CREATE TABLE [int].[IntegrationTable](
+	[Id] [int] NOT NULL,
+	[SectionId] [int] NULL,
+	[TableName] [varchar](500) NULL,
+	[TableSchema] [varchar](50) NULL,
+	[TableFilter] [varchar](5000) NULL
+) ON [PRIMARY]
+GO
+INSERT [int].[IntegratedSystem] ([Id], [SystemName], [TablePrefix], [LatestTimestampQuery]) VALUES (1, N'NCS-Web', N'[FABRIC_sqlFCC].[sqlFCC-0f24422b-85ae-405c-92fd-00379a41c946]', N'select max(ResponseTime) Timestamp
+into ##LatestFullNCSCycle
+from [FABRIC_sqlFCC].[sqlFCC-0f24422b-85ae-405c-92fd-00379a41c946].[dbo].ApiRequestLogs
+where Endpoint = ''openMonthDates''')
+GO
+INSERT [int].[Integration] ([Id], [Name], [SystemId], [StrategyId]) VALUES (1, NULL, 1, 2)
+GO
+INSERT [int].[Integration] ([Id], [Name], [SystemId], [StrategyId]) VALUES (2, NULL, 1, 2)
+GO
+INSERT [int].[IntegrationDetails] ([Id], [IntId], [SectionId]) VALUES (1, 1, 1)
+GO
+INSERT [int].[IntegrationDetails] ([Id], [IntId], [SectionId]) VALUES (2, 1, 2)
+GO
+INSERT [int].[IntegrationDetails] ([Id], [IntId], [SectionId]) VALUES (3, 2, 1)
+GO
+INSERT [int].[IntegrationDetails] ([Id], [IntId], [SectionId]) VALUES (4, 2, 2)
+GO
+INSERT [int].[IntegrationDetails] ([Id], [IntId], [SectionId]) VALUES (5, 2, 3)
+GO
+INSERT [int].[IntegrationSection] ([Id], [Name]) VALUES (1, N'Generic')
+GO
+INSERT [int].[IntegrationSection] ([Id], [Name]) VALUES (2, N'Census')
+GO
+INSERT [int].[IntegrationSection] ([Id], [Name]) VALUES (3, N'AR')
+GO
+INSERT [int].[IntegrationStrategy] ([Id], [Strategy]) VALUES (1, N'Incremental')
+GO
+INSERT [int].[IntegrationStrategy] ([Id], [Strategy]) VALUES (2, N'Full')
+GO
+INSERT [int].[IntegrationTable] ([Id], [SectionId], [TableName], [TableSchema], [TableFilter]) VALUES (1, 1, N'Companies', N'dbo', N'IsARTrackEnabled = 1')
+GO
+INSERT [int].[IntegrationTable] ([Id], [SectionId], [TableName], [TableSchema], [TableFilter]) VALUES (2, 2, N'Residents', N'dbo', NULL)
+GO
+INSERT [int].[IntegrationTable] ([Id], [SectionId], [TableName], [TableSchema], [TableFilter]) VALUES (3, 2, N'ResidentPayorReferenceNumbers', N'dbo', NULL)
+GO
+INSERT [int].[IntegrationTable] ([Id], [SectionId], [TableName], [TableSchema], [TableFilter]) VALUES (4, 2, N'BillingGroups', N'dbo', NULL)
+GO
+INSERT [int].[IntegrationTable] ([Id], [SectionId], [TableName], [TableSchema], [TableFilter]) VALUES (5, 2, N'BillableEntities', N'dbo', NULL)
+GO
+INSERT [int].[IntegrationTable] ([Id], [SectionId], [TableName], [TableSchema], [TableFilter]) VALUES (6, 2, N'ResidentPartBEligibilities', N'dbo', NULL)
+GO
+INSERT [int].[IntegrationTable] ([Id], [SectionId], [TableName], [TableSchema], [TableFilter]) VALUES (7, 2, N'ResidentMedicaidPending', N'dbo', NULL)
+GO
+INSERT [int].[IntegrationTable] ([Id], [SectionId], [TableName], [TableSchema], [TableFilter]) VALUES (8, 2, N'ResidentStays', N'dbo', NULL)
+GO
+INSERT [int].[IntegrationTable] ([Id], [SectionId], [TableName], [TableSchema], [TableFilter]) VALUES (9, 2, N'ResidentStayPayors', N'dbo', NULL)
+GO
+INSERT [int].[IntegrationTable] ([Id], [SectionId], [TableName], [TableSchema], [TableFilter]) VALUES (10, 2, N'Beds', N'dbo', NULL)
+GO
+INSERT [int].[IntegrationTable] ([Id], [SectionId], [TableName], [TableSchema], [TableFilter]) VALUES (11, 2, N'ResidentStayBeds', N'dbo', NULL)
+GO
+INSERT [int].[IntegrationTable] ([Id], [SectionId], [TableName], [TableSchema], [TableFilter]) VALUES (12, 3, N'ResidentBills', N'dbo', NULL)
+GO
+INSERT [int].[IntegrationTable] ([Id], [SectionId], [TableName], [TableSchema], [TableFilter]) VALUES (13, 3, N'ResidentAncillaryBills', N'dbo', NULL)
+GO
+INSERT [int].[IntegrationTable] ([Id], [SectionId], [TableName], [TableSchema], [TableFilter]) VALUES (14, 1, N'ResourceValues', N'dbo', NULL)
+GO
+INSERT [int].[IntegrationTable] ([Id], [SectionId], [TableName], [TableSchema], [TableFilter]) VALUES (15, 2, N'ResidentPayorCoinsurers', N'dbo', NULL)
+GO
+INSERT [int].[IntegrationTable] ([Id], [SectionId], [TableName], [TableSchema], [TableFilter]) VALUES (16, 2, N'ResidentStayPayorRateCodes', N'dbo', NULL)
+GO
+INSERT [int].[IntegrationTable] ([Id], [SectionId], [TableName], [TableSchema], [TableFilter]) VALUES (17, 2, N'ResidentPayorAuthorizationNumbers', N'dbo', NULL)
+GO
+INSERT [int].[IntegrationTable] ([Id], [SectionId], [TableName], [TableSchema], [TableFilter]) VALUES (18, 2, N'DistinctUnits', N'dbo', NULL)
+GO
+INSERT [int].[IntegrationTable] ([Id], [SectionId], [TableName], [TableSchema], [TableFilter]) VALUES (19, 3, N'Deposits', N'dbo', NULL)
+GO
+INSERT [int].[IntegrationTable] ([Id], [SectionId], [TableName], [TableSchema], [TableFilter]) VALUES (20, 3, N'Receipts', N'dbo', NULL)
+GO
