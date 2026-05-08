@@ -1,4 +1,11 @@
-Create or ALTER PROCEDURE [int].[GeneratePreLoadScript]
+USE [DsReplica]
+GO
+/****** Object:  StoredProcedure [int].[GeneratePreLoadScript]    Script Date: 5/8/2026 9:20:55 AM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+ALTER   PROCEDURE [int].[GeneratePreLoadScript]
     @IntegrationId INT,
     @Execute bit = 1,
     @FilterByARTrackEnabled bit = 0,
@@ -265,23 +272,23 @@ END +
         FROM #ArtTables
         WHERE RowNum = @ArtRowNum;
 
-        SET @ArtTempTableName = N'ART_' + @ArtTable;
+        SET @ArtTempTableName = @ArtTable;
 
         IF @ArtSectionName = N'Generic'
         BEGIN
             SET @SQL =
-                N'IF OBJECT_ID(''tempdb..[##' + @ArtTempTableName + N']'') IS NOT NULL DROP TABLE [##' + @ArtTempTableName + N'];' + @CRLF +
+                N'IF OBJECT_ID(''[art].[' + @ArtTempTableName + N']'') IS NOT NULL DROP TABLE [art].[' + @ArtTempTableName + N'];' + @CRLF +
                 N'select t.*' + @CRLF +
-                N'into [##' + @ArtTempTableName + N']' + @CRLF +
+                N'into [art].[' + @ArtTempTableName + N']' + @CRLF +
                 N'from ' + QUOTENAME(@LiveLinkedServer) + N'.' + QUOTENAME(@LiveDb) + N'.[dbo].[' + @ArtTable + N'] t' + @CRLF +
                 N';';
         END
         ELSE IF @ArtTable = N'tblPhysicalEntity'
         BEGIN
             SET @SQL =
-                N'IF OBJECT_ID(''tempdb..[##' + @ArtTempTableName + N']'') IS NOT NULL DROP TABLE [##' + @ArtTempTableName + N'];' + @CRLF +
+                N'IF OBJECT_ID(''[art].[' + @ArtTempTableName + N']'') IS NOT NULL DROP TABLE [art].[' + @ArtTempTableName + N'];' + @CRLF +
                 N'select t.*' + @CRLF +
-                N'into [##' + @ArtTempTableName + N']' + @CRLF +
+                N'into [art].[' + @ArtTempTableName + N']' + @CRLF +
                 N'from ' + QUOTENAME(@LiveLinkedServer) + N'.' + QUOTENAME(@LiveDb) + N'.[dbo].[' + @ArtTable + N'] t' + @CRLF +
                 N'join ##Companies c on t.SyncId = c.Id' + @CRLF +
                 N';';
@@ -289,21 +296,21 @@ END +
         ELSE
         BEGIN
             SET @SQL =
-                N'IF OBJECT_ID(''tempdb..[##' + @ArtTempTableName + N']'') IS NOT NULL DROP TABLE [##' + @ArtTempTableName + N'];' + @CRLF +
+                N'IF OBJECT_ID(''[art].[' + @ArtTempTableName + N']'') IS NOT NULL DROP TABLE [art].[' + @ArtTempTableName + N'];' + @CRLF +
                 CASE
                     WHEN ISNULL(@PreLoadJoins, N'') <> ''
                         THEN
                             N'select mainTable.*' + @CRLF +
-                            N'into [##' + @ArtTempTableName + N']' + @CRLF +
+                            N'into [art].[' + @ArtTempTableName + N']' + @CRLF +
                             N'from ' + QUOTENAME(@LiveLinkedServer) + N'.' + QUOTENAME(@LiveDb) + N'.[dbo].[' + @ArtTable + N'] mainTable' + @CRLF +
                             @PreLoadJoins + @CRLF +
-                            N'join ##ART_tblPhysicalEntity pe on t.PeId = pe.Id' + @CRLF +
+                            N'join [art].tblPhysicalEntity pe on t.PeId = pe.Id' + @CRLF +
                             N'join ##Companies c on pe.SyncId = c.Id' + @CRLF
                     ELSE
                             N'select t.*' + @CRLF +
-                            N'into [##' + @ArtTempTableName + N']' + @CRLF +
+                            N'into [art].[' + @ArtTempTableName + N']' + @CRLF +
                             N'from ' + QUOTENAME(@LiveLinkedServer) + N'.' + QUOTENAME(@LiveDb) + N'.[dbo].[' + @ArtTable + N'] t' + @CRLF +
-                            N'join ##ART_tblPhysicalEntity pe on t.PeId = pe.Id' + @CRLF +
+                            N'join [art].tblPhysicalEntity pe on t.PeId = pe.Id' + @CRLF +
                             N'join ##Companies c on pe.SyncId = c.Id' + @CRLF
                 END +
                 N';';
