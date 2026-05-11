@@ -1,6 +1,6 @@
 USE [DsReplica]
 GO
-/****** Object:  Table [int].[ArtTableLoader]    Script Date: 5/8/2026 9:12:10 AM ******/
+/****** Object:  Table [int].[ArtTableLoader]    Script Date: 5/11/2026 3:38:49 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -16,11 +16,12 @@ CREATE TABLE [int].[ArtTableLoader](
 	[LiveArtMergeJoins] [varchar](8000) NULL,
 	[PrimaryKeyColumn] [varchar](50) NULL,
 	[HasDeleteAction] [bit] NULL,
+	[UseArtTableForPreLoader] [bit] NULL,
 	[PreLoaderJoins] [varchar](8000) NULL,
 	[SectionId] [int] NULL
 ) ON [PRIMARY]
 GO
-INSERT [int].[ArtTableLoader] ([Id], [Name], [SourceTable], [ArtTable], [SourceGenQuery], [ArtGenQuery], [LiveArtMergeSelect], [LiveArtMergeJoins], [PrimaryKeyColumn], [HasDeleteAction], [PreLoaderJoins], [SectionId]) VALUES (1, N'tblPhysicalEntity', N'Companies', N'tblPhysicalEntity', N'select Id SyncId, ShortName Name, Name FriendlyName, ShortName LegacyName, ShortName LogicalName, 3 LevelId, Deleted 
+INSERT [int].[ArtTableLoader] ([Id], [Name], [SourceTable], [ArtTable], [SourceGenQuery], [ArtGenQuery], [LiveArtMergeSelect], [LiveArtMergeJoins], [PrimaryKeyColumn], [HasDeleteAction], [UseArtTableForPreLoader], [PreLoaderJoins], [SectionId]) VALUES (1, N'tblPhysicalEntity', N'Companies', N'tblPhysicalEntity', N'select Id SyncId, ShortName Name, Name FriendlyName, ShortName LegacyName, ShortName LogicalName, 3 LevelId, Deleted 
 into [source].tblPhysicalEntity
 from ##Companies', N'select pe.SyncId, pe.Name, pe.FriendlyName, pe.LegacyName, pe.LogicalName, pe.LevelId, ~Active Deleted
 into [target].tblPhysicalEntity
@@ -28,9 +29,9 @@ from [art].tblPhysicalEntity pe
 join [source].tblPhysicalEntity spe on spe.SyncId = pe.SyncId
 where pe.LevelId = 3
 and StateId = 1097', N'select SyncId, Name, FriendlyName, LegacyName, LogicalName, LevelId, case when Deleted = 0 then 1097 else 1098 end StateId
-', NULL, N'SyncId', 1, NULL, 2)
+', NULL, N'SyncId', 1, 0, NULL, 2)
 GO
-INSERT [int].[ArtTableLoader] ([Id], [Name], [SourceTable], [ArtTable], [SourceGenQuery], [ArtGenQuery], [LiveArtMergeSelect], [LiveArtMergeJoins], [PrimaryKeyColumn], [HasDeleteAction], [PreLoaderJoins], [SectionId]) VALUES (3, N'tblPerson', N'Residents', N'tblPerson', N'select Id SyncId, CompanyId PeId, FirstName First, isnull(MiddleName,'''') Middle, LastName Last
+INSERT [int].[ArtTableLoader] ([Id], [Name], [SourceTable], [ArtTable], [SourceGenQuery], [ArtGenQuery], [LiveArtMergeSelect], [LiveArtMergeJoins], [PrimaryKeyColumn], [HasDeleteAction], [UseArtTableForPreLoader], [PreLoaderJoins], [SectionId]) VALUES (3, N'tblPerson', N'Residents', N'tblPerson', N'select Id SyncId, CompanyId PeId, FirstName First, isnull(MiddleName,'''') Middle, LastName Last
 , isnull(SocialSecurityNumber, '''') Social, Case when Gender = ''Male'' then 1 else 0 end Male
 , DateOfBirth BDate, DateOfDeath EDate, 12 PersonTypeId, Deleted
 into [source].tblPerson
@@ -46,9 +47,9 @@ where 1=1
 and p.StateId = 1097', N'select mainTable.SyncId, pe.Id PeId, mainTable.First, mainTable.Middle, mainTable.Last
 , mainTable.Social, mainTable.Male, mainTable.BDate, mainTable.EDate, mainTable.PersonTypeId
 , case when mainTable.Deleted = 0 then 1097 else 1098 end StateId', N'Join [xTrack].[dbo].[tblPhysicalEntity] pe on pe.SyncId = mainTable.PeId
-', N'SyncId', 1, NULL, 2)
+', N'SyncId', 1, 0, NULL, 2)
 GO
-INSERT [int].[ArtTableLoader] ([Id], [Name], [SourceTable], [ArtTable], [SourceGenQuery], [ArtGenQuery], [LiveArtMergeSelect], [LiveArtMergeJoins], [PrimaryKeyColumn], [HasDeleteAction], [PreLoaderJoins], [SectionId]) VALUES (4, N'tblResident', N'Residents', N'tblResident', N'IF OBJECT_ID(''[source].tblResident'') IS NOT NULL DROP TABLE [source].tblResident;
+INSERT [int].[ArtTableLoader] ([Id], [Name], [SourceTable], [ArtTable], [SourceGenQuery], [ArtGenQuery], [LiveArtMergeSelect], [LiveArtMergeJoins], [PrimaryKeyColumn], [HasDeleteAction], [UseArtTableForPreLoader], [PreLoaderJoins], [SectionId]) VALUES (4, N'tblResident', N'Residents', N'tblResident', N'IF OBJECT_ID(''[source].tblResident'') IS NOT NULL DROP TABLE [source].tblResident;
 IF OBJECT_ID(''[target].tblResident'') IS NOT NULL DROP TABLE [target].tblResident;
 IF OBJECT_ID(''tempdb..##MedicareAEligibility'') IS NOT NULL DROP TABLE ##MedicareAEligibility;
 IF OBJECT_ID(''tempdb..##MedicareBEligibility'') IS NOT NULL DROP TABLE ##MedicareBEligibility;
@@ -188,9 +189,9 @@ where 1=1
 and r.StateId = 1097', N'select mainTable.SyncId, p.Id PersonId, pe.Id PeId, mainTable.SystemNo, mainTable.InLegal
 , mainTable.IsPending, mainTable.StayStatus, mainTable.BedNumber, mainTable.McoNum, mainTable.McaNum
 , mainTable.AStart, mainTable.AEnd, BStart, mainTable.BEnd, case when mainTable.deleted = 0 then 1097 else 1098 end StateId', N'join [xtrack].[dbo].[tblPerson] p on mainTable.PersonId = p.SyncId
-join [xtrack].[dbo].[tblPhysicalEntity] pe on mainTable.PeId = pe.SyncId ', N'SyncId', 1, NULL, 2)
+join [xtrack].[dbo].[tblPhysicalEntity] pe on mainTable.PeId = pe.SyncId ', N'SyncId', 1, 0, NULL, 2)
 GO
-INSERT [int].[ArtTableLoader] ([Id], [Name], [SourceTable], [ArtTable], [SourceGenQuery], [ArtGenQuery], [LiveArtMergeSelect], [LiveArtMergeJoins], [PrimaryKeyColumn], [HasDeleteAction], [PreLoaderJoins], [SectionId]) VALUES (5, N'tblStay', N'ResidentStays', N'tblStay', N'select stay.Id SyncId, ResidentId, AdmitDate Admission, DischargeDate Discharge, case when rv.ShortDescription = ''H'' then 1 else 0 end IsBh, stay.Deleted
+INSERT [int].[ArtTableLoader] ([Id], [Name], [SourceTable], [ArtTable], [SourceGenQuery], [ArtGenQuery], [LiveArtMergeSelect], [LiveArtMergeJoins], [PrimaryKeyColumn], [HasDeleteAction], [UseArtTableForPreLoader], [PreLoaderJoins], [SectionId]) VALUES (5, N'tblStay', N'ResidentStays', N'tblStay', N'select stay.Id SyncId, ResidentId, AdmitDate Admission, DischargeDate Discharge, case when rv.ShortDescription = ''H'' then 1 else 0 end IsBh, stay.Deleted
 into [source].tblStay
 from ##ResidentStays stay
 join ##ResourceValues rv on stay.RecordTypeId = rv.Id', N'select s.SyncId, r.SyncId ResidentId, Admission, Discharge, isnull(IsBh,0) IsBh, 0 Deleted
@@ -199,9 +200,9 @@ from [art].tblStay s
 join [art].tblResident r on r.Id = s.ResId
 join [art].tblPhysicalEntity pe on pe.Id = r.PeId
 join [target].tblPhysicalEntity peInt on pe.SyncId = peInt.SyncId', N'select mainTable.SyncId, r.Id ResId, mainTable.Admission, mainTable.Discharge, mainTable.IsBh, case when mainTable.Deleted = 0 then 1097 else 1098 end StateId
-', N'join [xtrack].[dbo].[tblResident] r on mainTable.ResidentId = r.SyncId', N'SyncId', 1, N'join [art].tblResident t on t.Id = mainTable.ResId', 2)
+', N'join [xtrack].[dbo].[tblResident] r on mainTable.ResidentId = r.SyncId', N'SyncId', 1, 0, N'join [art].tblResident t on t.Id = mainTable.ResId', 2)
 GO
-INSERT [int].[ArtTableLoader] ([Id], [Name], [SourceTable], [ArtTable], [SourceGenQuery], [ArtGenQuery], [LiveArtMergeSelect], [LiveArtMergeJoins], [PrimaryKeyColumn], [HasDeleteAction], [PreLoaderJoins], [SectionId]) VALUES (6, N'tblStayPayor', N'ResidentStayPayors', N'tblStayPayor', N'IF OBJECT_ID(''tempdb..##StayCoPayor'') IS NOT NULL DROP TABLE ##StayCoPayor;
+INSERT [int].[ArtTableLoader] ([Id], [Name], [SourceTable], [ArtTable], [SourceGenQuery], [ArtGenQuery], [LiveArtMergeSelect], [LiveArtMergeJoins], [PrimaryKeyColumn], [HasDeleteAction], [UseArtTableForPreLoader], [PreLoaderJoins], [SectionId]) VALUES (6, N'tblStayPayor', N'ResidentStayPayors', N'tblStayPayor', N'IF OBJECT_ID(''tempdb..##StayCoPayor'') IS NOT NULL DROP TABLE ##StayCoPayor;
 IF OBJECT_ID(''tempdb..##BestRateCode'') IS NOT NULL DROP TABLE ##BestRateCode;
 
 Select Id SyncId, ResidentStayId StayId, StartDate, EndDate, IncidentNumber IncidentNum, ExpendedDays
@@ -303,10 +304,10 @@ join [target].tblPhysicalEntity peInt on pe.SyncId = peInt.SyncId
  , case when mainTable.Deleted = 0 then 1097 else 1098 end StateId
 ', N'join [xTrack].[dbo].[tblStay] s on s.SyncId = mainTable.StayId
 join [xTrack].[dbo].[tblPayor] p on p.SyncId = mainTable.PayorId
-left join [xTrack].[dbo].[tblPayor] cp on cp.SyncId = mainTable.CoPayorId', N'SyncId', 1, N'join [art].tblStay stay on stay.Id = mainTable.StayId 
+left join [xTrack].[dbo].[tblPayor] cp on cp.SyncId = mainTable.CoPayorId', N'SyncId', 1, 0, N'join [art].tblStay stay on stay.Id = mainTable.StayId 
 join [art].tblResident t on t.Id = stay.ResId', 2)
 GO
-INSERT [int].[ArtTableLoader] ([Id], [Name], [SourceTable], [ArtTable], [SourceGenQuery], [ArtGenQuery], [LiveArtMergeSelect], [LiveArtMergeJoins], [PrimaryKeyColumn], [HasDeleteAction], [PreLoaderJoins], [SectionId]) VALUES (2, N'tblPayor', N'BillableEntities', N'tblPayor', N'select p.Id SyncId, p.Code, p.Name, p.Name FriendlyName, pg.Name PayorGroup, p.CompanyId PeId, p.Deleted
+INSERT [int].[ArtTableLoader] ([Id], [Name], [SourceTable], [ArtTable], [SourceGenQuery], [ArtGenQuery], [LiveArtMergeSelect], [LiveArtMergeJoins], [PrimaryKeyColumn], [HasDeleteAction], [UseArtTableForPreLoader], [PreLoaderJoins], [SectionId]) VALUES (2, N'tblPayor', N'BillableEntities', N'tblPayor', N'select p.Id SyncId, p.Code, p.Name, p.Name FriendlyName, pg.Name PayorGroup, p.CompanyId PeId, p.Deleted
 into [source].tblPayor
 from ##BillableEntities p
 join ##BillingGroups pg on pg.Id = p.BillingGroupId
@@ -318,18 +319,18 @@ join [art].tblPhysicalEntity pe on pe.Id = p.PeId
 join [target].tblPhysicalEntity peInt on pe.SyncId = peInt.SyncId', N'select mainTable.SyncId, mainTable.Code, mainTable.Name, mainTable.FriendlyName, pgroup.Id ParentId, pe.Id PeId, case when mainTable.Deleted = 0 then 1097 else 1098 end StateId
 ', N'join [xTrack].[dbo].[tblPayor] pgroup on (pgroup.Name = mainTable.PayorGroup and pgroup.LevelId in (5,6))
 join [xTrack].[dbo].[tblPhysicalEntity] pe on pe.SyncId = mainTable.PeId
-', N'SyncId', 1, NULL, 2)
+', N'SyncId', 1, 0, NULL, 2)
 GO
-INSERT [int].[ArtTableLoader] ([Id], [Name], [SourceTable], [ArtTable], [SourceGenQuery], [ArtGenQuery], [LiveArtMergeSelect], [LiveArtMergeJoins], [PrimaryKeyColumn], [HasDeleteAction], [PreLoaderJoins], [SectionId]) VALUES (7, N'tblNameValue', NULL, N'tblNameValue', N'select distinct Code Name
+INSERT [int].[ArtTableLoader] ([Id], [Name], [SourceTable], [ArtTable], [SourceGenQuery], [ArtGenQuery], [LiveArtMergeSelect], [LiveArtMergeJoins], [PrimaryKeyColumn], [HasDeleteAction], [UseArtTableForPreLoader], [PreLoaderJoins], [SectionId]) VALUES (7, N'tblNameValue', NULL, N'tblNameValue', N'select distinct Code Name
 into [source].tblNameValue 
 from ##DistinctUnits', N'select dus.Name
 into [target].[tblNameValue] 
 from [art].tblNameValue dus
 join [art].tblNameValue parent on parent.Id = dus.ParentId
 join [source].tblGenericDu sdu on dus.Name = sdu.Id
-where parent.Name = ''Case.DistinctUnits''', N'SELECT Name, Name FriendlyName, (select Id from [xtrack].[dbo].tblNameValue where Name = ''Case.DistinctUnits'') ParentId', NULL, N'Name', 0, NULL, 1)
+where parent.Name = ''Case.DistinctUnits''', N'SELECT Name, Name FriendlyName, (select Id from [xtrack].[dbo].tblNameValue where Name = ''Case.DistinctUnits'') ParentId', NULL, N'Name', 0, 0, NULL, 1)
 GO
-INSERT [int].[ArtTableLoader] ([Id], [Name], [SourceTable], [ArtTable], [SourceGenQuery], [ArtGenQuery], [LiveArtMergeSelect], [LiveArtMergeJoins], [PrimaryKeyColumn], [HasDeleteAction], [PreLoaderJoins], [SectionId]) VALUES (8, N'tblFacDistinctUnit', NULL, N'tblFacDistinctUnit', N'select du.Id SyncId, du.Code Name, c.Id PeId, du.Deleted
+INSERT [int].[ArtTableLoader] ([Id], [Name], [SourceTable], [ArtTable], [SourceGenQuery], [ArtGenQuery], [LiveArtMergeSelect], [LiveArtMergeJoins], [PrimaryKeyColumn], [HasDeleteAction], [UseArtTableForPreLoader], [PreLoaderJoins], [SectionId]) VALUES (8, N'tblFacDistinctUnit', NULL, N'tblFacDistinctUnit', N'select du.Id SyncId, du.Code Name, c.Id PeId, du.Deleted
 into [source].[tblFacDistinctUnit]
 from ##DistinctUnits du
 join ##Companies c on du.CompanyId = c.Id', N'select du.SyncId, duNV.Name, pe.SyncId PeId
@@ -342,9 +343,184 @@ join [art].tblNameValue statusNv on du.StateId = statusNv.Id
 join [target].tblPhysicalEntity peInt on pe.SyncId = peInt.SyncId', N'SELECT mainTable.SyncId , duNV.Id DuNvId, Deleted, case when Deleted = 0 then 1097 else 1098 end StateId
 ', N'join [xtrack].[dbo].[tblPhysicalEntity] pe on mainTable.PeId = pe.SyncId
 join xTrack.dbo.tblNameValue duNv on mainTable.Name = duNv.Name
-', N'SyncId', 1, NULL, 2)
+', N'SyncId', 1, 0, NULL, 2)
 GO
-INSERT [int].[ArtTableLoader] ([Id], [Name], [SourceTable], [ArtTable], [SourceGenQuery], [ArtGenQuery], [LiveArtMergeSelect], [LiveArtMergeJoins], [PrimaryKeyColumn], [HasDeleteAction], [PreLoaderJoins], [SectionId]) VALUES (9, N'tblAging.Bill_I', NULL, N'tblAging.Bill', N'select 
+INSERT [int].[ArtTableLoader] ([Id], [Name], [SourceTable], [ArtTable], [SourceGenQuery], [ArtGenQuery], [LiveArtMergeSelect], [LiveArtMergeJoins], [PrimaryKeyColumn], [HasDeleteAction], [UseArtTableForPreLoader], [PreLoaderJoins], [SectionId]) VALUES (12, N'tblAging.Bal', NULL, N'tblAging.Bal', N'IF OBJECT_ID(''tempdb..##vwAging'') IS NOT NULL DROP TABLE ##vwAging;
+IF OBJECT_ID(''tempdb..##vwAgingAllInfo'') IS NOT NULL DROP TABLE ##vwAgingAllInfo;
+IF OBJECT_ID(''tempdb..##groupBillDuDisplay'') IS NOT NULL DROP TABLE ##groupBillDuDisplay;
+IF OBJECT_ID(''tempdb..##tblAgingSubTotal'') IS NOT NULL DROP TABLE ##tblAgingSubTotal;
+
+select * 
+into ##vwAging
+from(
+select distinct [UniqueIdentifier] AgingKeyWithDates, ResId, PayorId, ServiceTypeId, PayTypeId,BillingMonth, FacDuId
+from(
+select [UniqueIdentifier], ResId, PayorId, ServiceTypeId, PayTypeId, Balance bal, BillingMonth, FacDuId
+from [art].[tblAging.Bill] bill
+
+union all 
+select [UniqueIdentifier], ResId , PayorId, ServiceTypeId, PayTypeId, Balance, BillingMonth, FacDuId
+from [art].[tblAging.Cr] bill
+) as a
+) as b
+join (
+select UniqueIdentifier, sum(bal) bal
+from(
+select [UniqueIdentifier], sum(Balance) bal
+ from [art].[tblAging.Bill] bill
+ group by [UniqueIdentifier]
+ 
+ union all
+
+select [UniqueIdentifier], sum(Balance) bal
+ from [art].[tblAging.Cr] bill
+ where Balance <> 0
+ group by [UniqueIdentifier]
+) as bal
+ group by UniqueIdentifier
+ ) as outerbal on b.AgingKeyWithDates collate SQL_Latin1_General_CP1_CI_AS= outerbal.UniqueIdentifier
+ 
+select
+  aging.UniqueIdentifier
+  , Convert([varchar](50), aging.ResId) +''-''+  Convert([varchar](50), aging.PayorId)+''-''+ payType.Abbreviation + serviceType.Abbreviation [AgingKey-RPPS] 
+  , Convert([varchar](50), aging.ResId) +''-''+  Convert([varchar](50), aging.PayorId)+''-''+ payType.Abbreviation + serviceType.Abbreviation + ''-'' + CONVERT([varchar](50),nvDu.Name collate Latin1_General_CS_AS) [AgingKey-RPPSD] 
+  , aging.UniqueIdentifier [AgingKey-RPPSDM] 
+  , Convert([varchar](50), aging.ResId) +''-''+  Convert([varchar](50), aging.PayorId)+''-''+ payType.Abbreviation + serviceType.Abbreviation + ''-'' + Convert([varchar](50), aging.BillingMonth)[AgingKey-RPPSM] 
+  , res.PeId FacId, case when isnull(pe.FriendlyName,'''') <> '''' then pe.FriendlyName else pe.Name end Fac, aging.ResId, person.Last + '' '' + person.First + '' '' + person.Middle Res
+  , case when pgroupMedicaid.Name = ''Root'' then pgroup.Id else pgroupMedicaid.Id end PayorGroupId
+  , case when pgroupMedicaid.Name = ''Root'' then pgroup.Name else pgroupMedicaid.Name end PayorGroup
+, aging.PayorId, pp.Name Payor, aging.PayTypeId, payType.Abbreviation PayType, aging.ServiceTypeId, serviceType.Abbreviation ServiceType
+, aging.BillingMonth
+, aging.bal Balance
+, aging.bal [Balance-RPPSDM]
+, cast(0.00  as money)[Balance-RPPSM]
+, res.McaNum MedicareNum
+, res.McoNum MedicaidNum
+, res.IsPending
+, person.Social Ssn
+, person.BDate Dob
+, res.SystemNo SystemNo
+, case when person.Male = 1 then ''M'' else ''F'' end Gender
+, res.StayStatus
+, aging.FacDuId, nvDu.Name Du
+, res.InLegal
+, Convert([varchar](50), aging.ResId)+''-''+convert([varchar](50), case when pgroupMedicaid.Name = ''Root'' then pgroup.Id else pgroupMedicaid.Id end) TrackingIdentifier
+, pgroup.BreakByDu
+, cast(null as varchar(50)) [Du-Min]
+, cast(null as varchar(50)) [Du-Display]
+, cast(0.00 as money) SubTotal
+into ##vwAgingAllInfo
+from ##vwAging aging
+join [art].tblResident res on aging.ResId = res.Id
+join [art].tblPhysicalEntity pe on res.PeId = pe.Id
+join [art].tblPerson person on res.PersonId = person.Id
+join [art].tblPayor pp on pp.Id = aging.PayorId
+join [art].[tblPayorGroup] pgroup on pgroup.Id = pp.ParentId
+join [art].[tblPayorGroup] pgroupMedicaid on pgroup.ParentId = pgroupMedicaid.Id
+join [art].tblNameValue payType on payType.Id = aging.PayTypeId
+join [art].tblNameValue serviceType on serviceType.Id = aging.ServiceTypeId
+join  [art].[tblFacDistinctUnit] fdu on aging.FacDuId = fdu.Id
+join [art].tblNameValue nvDu on nvDu.Id = fdu.DuNvId
+where aging.bal <> 0
+
+
+--updating RPPSM level info besides for the DuDisplay  
+update aging
+set Balance = case when isnull(BreakByDu,0) = 0 then updt.Balance_RPPSM else aging.[Balance-RPPSDM] end,
+	[Balance-RPPSM] = updt.Balance_RPPSM,
+	[Du-Min] = updt.[Du-Min]
+from ##vwAgingAllInfo aging
+join (select [AgingKey-RPPSM], SUM(Balance) Balance_RPPSM, Min(Du) [Du-Min]
+	  from  ##vwAgingAllInfo
+	  group by [AgingKey-RPPSM]
+	 ) updt on aging.[AgingKey-RPPSM] = updt.[AgingKey-RPPSM]
+
+delete from aging
+from ##vwAgingAllInfo aging
+where 1=1
+and Balance = 0	
+
+--updating the RPPSM level for which Du to display depending if the billing table has only one distinct Du (that will end up in the balance table)
+select bal.[AgingKey-RPPSM],case when max(bill.FacDuId) <> min(bill.FacDuId) then null else min(bal.Du) end DuDisplay
+into ##groupBillDuDisplay
+from [art].[tblAging.Bill] bill
+join (select distinct UniqueIdentifier 
+	  from [art].[tblAging.Bill] 
+	  group by UniqueIdentifier
+	  having Sum(Balance) <> 0) nonzerobill on bill.UniqueIdentifier = nonzerobill.UniqueIdentifier
+join ##vwAgingAllInfo bal on bill.UniqueIdentifier = bal.UniqueIdentifier
+group by bal.[AgingKey-RPPSM]
+
+update bal
+set [Du-Display] = bdu.DuDisplay
+from ##vwAgingAllInfo bal
+join ##groupBillDuDisplay bdu on bal.[AgingKey-RPPSM] = bdu.[AgingKey-RPPSM]
+where isnull(BreakByDu,0) = 0
+
+
+
+
+update bal
+set [Du-Display] = Du
+from ##vwAgingAllInfo bal
+join (select [AgingKey-RPPSM]
+	  from ##vwAgingAllInfo
+	  where [Du-Display] is null and isnull(BreakByDu,0) = 0
+	  group by [AgingKey-RPPSM]
+	  having min(Du) = max(Du)) onlyOneDuForRPPSM on bal.[AgingKey-RPPSM] = onlyOneDuForRPPSM.[AgingKey-RPPSM]
+
+update bal
+set [Du-Display] = Du
+from ##vwAgingAllInfo bal
+where isnull(BreakByDu,0) = 1 
+
+
+select TrackingIdentifier, sum([Balance-RPPSDM]) subtotal
+into ##tblAgingSubTotal
+from ##vwAgingAllInfo
+group by TrackingIdentifier
+
+update aging
+set SubTotal = total.subtotal
+from ##vwAgingAllInfo aging
+join ##tblAgingSubTotal total on aging.TrackingIdentifier = total.TrackingIdentifier
+
+
+select ins.UniqueIdentifier, ins.TrackingIdentifier, ins.FacId, ins.Fac, ins.ResId, ins.Res, ins.PayorGroupId, ins.PayorGroup, ins.PayorId, ins.Payor
+, ins.PayTypeId, ins.PayType, ins.ServiceTypeId, ins.ServiceType, ins.BillingMonth
+, ins.Balance, ins.[AgingKey-RPPS], ins.[AgingKey-RPPSD], ins.[AgingKey-RPPSDM], ins.[Balance-RPPSDM], ins.[AgingKey-RPPSM], ins.[Balance-RPPSM] ,ins.MedicareNum, ins.MedicaidNum, ins.IsPending, ins.Ssn, ins.Dob, ins.SystemNo, ins.Gender
+, ins.StayStatus, ins.InLegal, ins.BreakByDu, ins.Du, ins.FacDuId, ins.[Du-Min], ins.[Du-Display], ins.SubTotal
+into [source].[tblAging.Bal]
+from ##vwAgingAllInfo ins', N'select bal.UniqueIdentifier, bal.TrackingIdentifier, bal.FacId, bal.Fac, bal.ResId, bal.Res, bal.PayorGroupId, bal.PayorGroup, bal.PayorId, bal.Payor
+, bal.PayTypeId, bal.PayType, bal.ServiceTypeId, bal.ServiceType, bal.BillingMonth
+, bal.Balance, bal.[AgingKey-RPPS], bal.[AgingKey-RPPSD], bal.[AgingKey-RPPSDM], bal.[Balance-RPPSDM], bal.[AgingKey-RPPSM], bal.[Balance-RPPSM] ,bal.MedicareNum, bal.MedicaidNum, bal.IsPending, bal.Ssn, bal.Dob, bal.SystemNo, bal.Gender
+, bal.StayStatus, bal.InLegal, bal.BreakByDu, bal.Du, bal.FacDuId, bal.[Du-Min], bal.[Du-Display], bal.SubTotal
+into [target].[tblAging.Bal]
+from [art].[tblAging.Bal] bal
+join [art].tblResident r on bal.ResId = r.Id
+join [art].tblPayor p on p.Id = bal.PayorId
+join [art].tblNameValue nvServiceType on nvServiceType.Id = bal.ServiceTypeId
+join [art].tblNameValue nvPayType on nvPayType.Id = bal.PayTypeId
+join [art].tblFacDistinctUnit du on du.Id = bal.FacDuId
+join [art].tblNameValue nvDu on nvDu.Id = du.DuNvId
+join [art].tblPhysicalEntity pe on r.PeId = pe.Id
+join [target].tblPhysicalEntity peInt on pe.SyncId = peInt.SyncId
+where 1=1', N'select mainTable.FacId, mainTable.Fac, mainTable.ResId, mainTable.Res
+, mainTable.BillingMonth, mainTable.PayorGroupId, mainTable.PayorGroup
+, mainTable.PayorId, mainTable.Payor, mainTable.ServiceTypeId, mainTable.ServiceType
+, mainTable.PayTypeId, mainTable.PayType
+, mainTable.FacDuId, mainTable.Du, mainTable.[Du-Min], mainTable.[Du-Display]
+, mainTable.Balance, mainTable.[AgingKey-RPPS], mainTable.[AgingKey-RPPSD]
+, mainTable.[AgingKey-RPPSDM],mainTable.[AgingKey-RPPSM]
+, mainTable.[Balance-RPPSDM], mainTable.[Balance-RPPSM]
+, mainTable.SubTotal
+, mainTable.UniqueIdentifier, mainTable.TrackingIdentifier
+, mainTable.MedicareNum, mainTable.MedicaidNum, mainTable.IsPending
+, mainTable.Ssn, mainTable.Dob, mainTable.Gender, mainTable.StayStatus
+, mainTable.InLegal, mainTable.BreakByDu', NULL, N'SyncId', 1, 0, N'join [art].tblResident t on t.Id = mainTable.ResId
+', 3)
+GO
+INSERT [int].[ArtTableLoader] ([Id], [Name], [SourceTable], [ArtTable], [SourceGenQuery], [ArtGenQuery], [LiveArtMergeSelect], [LiveArtMergeJoins], [PrimaryKeyColumn], [HasDeleteAction], [UseArtTableForPreLoader], [PreLoaderJoins], [SectionId]) VALUES (9, N'tblAging.Bill_I', NULL, N'tblAging.Bill', N'select 
 rb.Id SyncId
 , cast (rb.StartDate as date) StartDate
 , cast (rb.EndDate as date) EndDate
@@ -411,15 +587,18 @@ join [target].tblPhysicalEntity peInt on pe.SyncId = peInt.SyncId
 where 1=1
 and nvServiceType.Abbreviation = ''I''
 and bill.SyncId is not null', N'select mainTable.SyncId, mainTable.StartDate, mainTable.EndDate, mainTable.TransactionDate, r.Id ResId, p.Id PayorId
-, nvST.Id ServiceTypeId, nvPT.Id PayTypeId, mainTable.TherapyType, du.Id FacDuId, mainTable.Balance, mainTable.Deleted', N'join [xtrack].dbo.tblResident r on r.SyncId = mainTable.ResId
+, nvST.Id ServiceTypeId, nvPT.Id PayTypeId, mainTable.TherapyType, du.Id FacDuId, mainTable.Balance, mainTable.Deleted
+,((((((CONVERT([varchar](50),r.Id)+''''-'''')+CONVERT([varchar](50),p.Id))+''''-'''')+nvPT.Abbreviation+nvST.Abbreviation)+''''-'''')+CONVERT([varchar](50),nvDu.Name+''''-'''')
++CONVERT([varchar](50),dateadd(month,datediff(month,(0),mainTable.StartDate),(0)),(23))) UniqueIdentifier
+, CONVERT([varchar](50),r.Id)+''''-''''+CONVERT([varchar](50),p.ParentId) TrackingIdentifier
+, DATEADD(MONTH, DATEDIFF(MONTH, 0, mainTable.StartDate), 0) BillingMonth', N'join [xtrack].dbo.tblResident r on r.SyncId = mainTable.ResId
 join [xtrack].dbo.tblPayor p on p.SyncId = mainTable.PayorId
 join [xtrack].dbo.tblNameValue nvST on nvST.Abbreviation = mainTable.ServiceType 
 join [xtrack].dbo.tblNameValue nvPT on nvPT.Abbreviation = mainTable.PayType 
 join [xtrack].dbo.tblNameValue nvDu on nvDu.Name = mainTable.Du
-join [xtrack].dbo.tblFacDistinctUnit du on nvDu.Id = du.DuNvId and du.PeId = r.PeId
-', N'SyncId', 1, N'join [art].tblResident t on t.Id = mainTable.ResId', 3)
+join [xtrack].dbo.tblFacDistinctUnit du on nvDu.Id = du.DuNvId and du.PeId = r.PeId', N'SyncId', 1, 1, N'join [art].tblResident t on t.Id = mainTable.ResId', 3)
 GO
-INSERT [int].[ArtTableLoader] ([Id], [Name], [SourceTable], [ArtTable], [SourceGenQuery], [ArtGenQuery], [LiveArtMergeSelect], [LiveArtMergeJoins], [PrimaryKeyColumn], [HasDeleteAction], [PreLoaderJoins], [SectionId]) VALUES (10, N'tblAging.Bill_A', NULL, N'tblAging.Bill', N'select   
+INSERT [int].[ArtTableLoader] ([Id], [Name], [SourceTable], [ArtTable], [SourceGenQuery], [ArtGenQuery], [LiveArtMergeSelect], [LiveArtMergeJoins], [PrimaryKeyColumn], [HasDeleteAction], [UseArtTableForPreLoader], [PreLoaderJoins], [SectionId]) VALUES (10, N'tblAging.Bill_A', NULL, N'tblAging.Bill', N'select   
   rb.Id SyncId
 , cast (rb.StartDate as date) StartDate
 , cast (rb.EndDate as date) EndDate
@@ -491,15 +670,17 @@ where 1=1
 and nvServiceType.Abbreviation = ''A''
 and bill.SyncId is not null', N'select mainTable.SyncId, mainTable.StartDate, mainTable.EndDate, mainTable.TransactionDate, r.Id ResId, p.Id PayorId
 , nvST.Id ServiceTypeId, nvPT.Id PayTypeId, mainTable.TherapyType, du.Id FacDuId, mainTable.Balance, mainTable.Deleted
-', N'join [xtrack].dbo.tblResident r on r.SyncId = mainTable.ResId
+,((((((CONVERT([varchar](50),r.Id)+''''-'''')+CONVERT([varchar](50),p.Id))+''''-'''')+nvPT.Abbreviation+nvST.Abbreviation)+''''-'''')+CONVERT([varchar](50),nvDu.Name+''''-'''')
++CONVERT([varchar](50),dateadd(month,datediff(month,(0),mainTable.StartDate),(0)),(23))) UniqueIdentifier
+, CONVERT([varchar](50),r.Id)+''''-''''+CONVERT([varchar](50),p.ParentId) TrackingIdentifier
+, DATEADD(MONTH, DATEDIFF(MONTH, 0, mainTable.StartDate), 0) BillingMonth', N'join [xtrack].dbo.tblResident r on r.SyncId = mainTable.ResId
 join [xtrack].dbo.tblPayor p on p.SyncId = mainTable.PayorId
 join [xtrack].dbo.tblNameValue nvST on nvST.Abbreviation = mainTable.ServiceType 
 join [xtrack].dbo.tblNameValue nvPT on nvPT.Abbreviation = mainTable.PayType 
 join [xtrack].dbo.tblNameValue nvDu on nvDu.Name = mainTable.Du
-join [xtrack].dbo.tblFacDistinctUnit du on nvDu.Id = du.DuNvId and du.PeId = r.PeId
-', N'SyncId', 1, N'join [art].tblResident t on t.Id = mainTable.ResId', 3)
+join [xtrack].dbo.tblFacDistinctUnit du on nvDu.Id = du.DuNvId and du.PeId = r.PeId', N'SyncId', 1, 1, N'join [art].tblResident t on t.Id = mainTable.ResId', 3)
 GO
-INSERT [int].[ArtTableLoader] ([Id], [Name], [SourceTable], [ArtTable], [SourceGenQuery], [ArtGenQuery], [LiveArtMergeSelect], [LiveArtMergeJoins], [PrimaryKeyColumn], [HasDeleteAction], [PreLoaderJoins], [SectionId]) VALUES (11, N'tblAging.Cr', NULL, N'tblAging.Cr', N'select   
+INSERT [int].[ArtTableLoader] ([Id], [Name], [SourceTable], [ArtTable], [SourceGenQuery], [ArtGenQuery], [LiveArtMergeSelect], [LiveArtMergeJoins], [PrimaryKeyColumn], [HasDeleteAction], [UseArtTableForPreLoader], [PreLoaderJoins], [SectionId]) VALUES (11, N'tblAging.Cr', NULL, N'tblAging.Cr', N'select   
   rb.Id SyncId
 , cast (rb.StartDate as date) StartDate
 , cast (rb.EndDate as date) EndDate
@@ -521,7 +702,7 @@ left join ##DistinctUnits du on du.Id = rb.DistinctUnitId
 where rb.Deleted = 0
 and rb.ResidentId is not null
 and rb.StartDate is not null
-', N'select bill.SyncId, StartDate, EndDate
+and rb.BillableEntityId is not null', N'select bill.SyncId, StartDate, EndDate
 , cast (TransactionDate as date) TransactionDate
 , r.SyncId ResId, p.SyncId PayorId
 , nvServiceType.Abbreviation ServiceType, nvPayType.Abbreviation PayType
@@ -538,14 +719,21 @@ join [art].tblNameValue nvDu on nvDu.Id = du.DuNvId
 join [art].tblPhysicalEntity pe on r.PeId = pe.Id
 join [target].tblPhysicalEntity peInt on pe.SyncId = peInt.SyncId
 where 1=1
-and bill.SyncId is not null
-', N'select mainTable.SyncId, mainTable.StartDate, mainTable.EndDate, mainTable.TransactionDate, r.Id ResId, p.Id PayorId
+and bill.SyncId is not null', N'select mainTable.SyncId, mainTable.StartDate, mainTable.EndDate, mainTable.TransactionDate, r.Id ResId, p.Id PayorId
 , nvST.Id ServiceTypeId, nvPT.Id PayTypeId, mainTable.TherapyType, du.Id FacDuId, mainTable.Balance, mainTable.Deleted
-', N'join [xtrack].dbo.tblResident r on r.SyncId = mainTable.ResId
+,((((((CONVERT([varchar](50),r.Id)+''''-'''')+CONVERT([varchar](50),p.Id))+''''-'''')+nvPT.Abbreviation+nvST.Abbreviation)+''''-'''')+CONVERT([varchar](50),nvDu.Name+''''-'''')
++CONVERT([varchar](50),dateadd(month,datediff(month,(0),mainTable.StartDate),(0)),(23))) UniqueIdentifier
+, CONVERT([varchar](50),r.Id)+''''-''''+CONVERT([varchar](50),p.ParentId) TrackingIdentifier
+, DATEADD(MONTH, DATEDIFF(MONTH, 0, mainTable.StartDate), 0) BillingMonth', N'join [xtrack].dbo.tblResident r on r.SyncId = mainTable.ResId
 join [xtrack].dbo.tblPayor p on p.SyncId = mainTable.PayorId
 join [xtrack].dbo.tblNameValue nvST on nvST.Abbreviation = mainTable.ServiceType 
 join [xtrack].dbo.tblNameValue nvPT on nvPT.Abbreviation = mainTable.PayType 
 join [xtrack].dbo.tblNameValue nvDu on nvDu.Name = mainTable.Du
 join [xtrack].dbo.tblFacDistinctUnit du on nvDu.Id = du.DuNvId and du.PeId = r.PeId
-', N'SyncId', 1, N'join ##ART_tblResident t on t.Id = mainTable.ResId', 3)
+', N'SyncId', 1, 0, N'join [art].tblResident t on t.Id = mainTable.ResId', 3)
+GO
+INSERT [int].[ArtTableLoader] ([Id], [Name], [SourceTable], [ArtTable], [SourceGenQuery], [ArtGenQuery], [LiveArtMergeSelect], [LiveArtMergeJoins], [PrimaryKeyColumn], [HasDeleteAction], [UseArtTableForPreLoader], [PreLoaderJoins], [SectionId]) VALUES (13, N'tblPayorGroup', NULL, N'tblPayor', NULL, NULL, NULL, NULL, NULL, NULL, 0, N'join [ArTrackServer].[xTrack].[dbo].[tblPayor] g on t.Id = g.Id and g.LevelId in(5,6)
+', 1)
+GO
+ALTER TABLE [int].[ArtTableLoader] ADD  CONSTRAINT [DF_ArtTableLoader_UseArtTableForPreLoader]  DEFAULT ((0)) FOR [UseArtTableForPreLoader]
 GO
