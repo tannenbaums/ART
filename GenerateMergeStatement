@@ -9,7 +9,8 @@ CREATE OR ALTER PROCEDURE [dbo].[GenerateMergeStatement]
     @DeleteNotMatchedBySource BIT = 0,
     @SoftDeleteNotMatchedBySource BIT = 0,
     @DeletedColumn NVARCHAR(128) = NULL,
-    @DeltaMode BIT = 0
+    @DeltaMode BIT = 0,
+    @TrackDeletesAsDelta BIT = 0
 AS
 BEGIN
     DECLARE @SQL NVARCHAR(MAX);
@@ -30,10 +31,16 @@ BEGIN
         RETURN;
     END;
 
-    IF @DeltaMode = 1 
-       AND (@DeleteNotMatchedBySource = 1 OR @SoftDeleteNotMatchedBySource = 1)
+    IF @TrackDeletesAsDelta = 1 AND @SoftDeleteNotMatchedBySource = 1
     BEGIN
-        RAISERROR('DeltaMode cannot use DeleteNotMatchedBySource or SoftDeleteNotMatchedBySource because the source is not a full dataset.', 16, 1);
+        RAISERROR('You cannot enable both TrackDeletesAsDelta and SoftDeleteNotMatchedBySource.', 16, 1);
+        RETURN;
+    END;
+
+    IF @DeltaMode = 1 
+       AND (@DeleteNotMatchedBySource = 1 OR @SoftDeleteNotMatchedBySource = 1 OR @TrackDeletesAsDelta = 1)
+    BEGIN
+        RAISERROR('DeltaMode cannot use DeleteNotMatchedBySource, SoftDeleteNotMatchedBySource, or TrackDeletesAsDelta because the source is not a full dataset.', 16, 1);
         RETURN;
     END;
 
@@ -255,23 +262,61 @@ MERGE INTO ' + QUOTENAME(@TargetSchema) + '.' + QUOTENAME(@TargetTable) + ' AS t
 USING ' + QUOTENAME(@SourceSchema) + '.' + QUOTENAME(@SourceTable) + ' AS src
 ON ' + @JoinCondition;
 
+    IF @DeltaMode = 1
+    BEGIN
+        SET @SQL = @SQL + '
+
+WHEN MATCHED AND src.' + QUOTENAME(@IntegrationActionColumn) + ' = ''D''
+THEN DELETE';
+    END
+
     IF LEN(@UpdateColumns) > 0
     BEGIN
         SET @SQL = @SQL + '
 
-WHEN MATCHED AND (' + @UpdateColumns + ')
+WHEN MATCHED AND '
+            + CASE 
+                WHEN @DeltaMode = 1 
+                    THEN 'src.' + QUOTENAME(@IntegrationActionColumn) + ' <> ''D'' AND '
+                ELSE ''
+              END
+            + '(' + @UpdateColumns + ')
 THEN UPDATE SET ' + @Columns;
     END
 
     SET @SQL = @SQL + '
 
-WHEN NOT MATCHED THEN 
+WHEN NOT MATCHED '
+        + CASE 
+            WHEN @DeltaMode = 1 
+                THEN 'AND src.' + QUOTENAME(@IntegrationActionColumn) + ' <> ''D'' '
+            ELSE ''
+          END
+        + 'THEN 
     INSERT (' + @InsertColumns + ') 
     VALUES (' + @InsertValues + ')';
 
     IF @DeltaMode = 0
     BEGIN
-        IF @DeleteNotMatchedBySource = 1
+        IF @TrackDeletesAsDelta = 1
+        BEGIN
+            IF @StateColumn IS NOT NULL
+            BEGIN
+                SET @SQL = @SQL + '
+
+WHEN NOT MATCHED BY SOURCE THEN 
+    UPDATE SET ' + QUOTENAME(@StateColumn) + ' = ''inactive'', '
+                    + QUOTENAME(@IntegrationActionColumn) + ' = ''D''';
+            END
+            ELSE
+            BEGIN
+                SET @SQL = @SQL + '
+
+WHEN NOT MATCHED BY SOURCE THEN 
+    UPDATE SET ' + QUOTENAME(@IntegrationActionColumn) + ' = ''D''';
+            END
+        END
+        ELSE IF @DeleteNotMatchedBySource = 1
         BEGIN
             IF @StateColumn IS NOT NULL
             BEGIN
